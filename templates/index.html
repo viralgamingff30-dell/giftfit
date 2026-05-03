@@ -29,11 +29,10 @@ button:active{transform:scale(0.96)}
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const ANTHROPIC_KEY='{{ api_key }}';
 {% raw %}
 const {useState,useRef,useEffect,useMemo}=React;
 const AC='#C9916A',ACL='#EAD0B0',ACF='rgba(201,145,106,0.09)',BG='#0A0A10',CARD='#121219',CARD2='#181824',MUT='#6A6378',BRD='rgba(255,255,255,0.065)';
-
+ 
 /* ─── DATA ─── */
 const SKIN=[{id:'fair',c:'#FDDBB4',l:'Fair'},{id:'wheatish',c:'#E8B882',l:'Wheatish'},{id:'medium',c:'#C8895A',l:'Medium'},{id:'tan',c:'#A0622E',l:'Tan'},{id:'deep',c:'#7A3E18',l:'Deep'}];
 const HAIR=[{id:'black',c:'#100A04'},{id:'brown',c:'#4A2810'},{id:'auburn',c:'#7B1F1F'},{id:'blonde',c:'#C8A030'},{id:'grey',c:'#909090'},{id:'dyed',c:'#1A3A8A'}];
@@ -151,7 +150,7 @@ const CARD_TEMPLATES=[
   {id:'anniversary',bg:'linear-gradient(135deg,#5850CC,#2A2060)',emoji:'💍',label:'Anniversary'},
   {id:'thankyou',bg:'linear-gradient(135deg,#208840,#104820)',emoji:'🙏',label:'Thank You'},
 ];
-
+ 
 /* ─── Avatars ─── */
 function MaleAvatar({items,skin,hair}){
   const sc=SKIN.find(s=>s.id===skin)?.c||'#C8895A',hc=HAIR.find(h=>h.id===hair)?.c||'#100A04';
@@ -189,7 +188,7 @@ function MaleAvatar({items,skin,hair}){
     </svg>
   );
 }
-
+ 
 function FemaleAvatar({items,skin,hair}){
   const sc=SKIN.find(s=>s.id===skin)?.c||'#C8895A',hc=HAIR.find(h=>h.id===hair)?.c||'#100A04';
   const g=id=>items.find(i=>i.id===id);
@@ -227,13 +226,13 @@ function FemaleAvatar({items,skin,hair}){
     </svg>
   );
 }
-
+ 
 /* ─── Helpers ─── */
 function Toast({msg,onDone}){
   useEffect(()=>{const t=setTimeout(onDone,2400);return()=>clearTimeout(t)},[]);
   return <div className="pop" style={{position:'fixed',bottom:'1.5rem',left:'50%',transform:'translateX(-50%)',background:'#1A3A1A',border:'1px solid #4CAF50',borderRadius:'10px',padding:'0.55rem 1.2rem',fontSize:'0.78rem',color:'#A5D6A7',zIndex:999,pointerEvents:'none',whiteSpace:'nowrap'}}>✓ {msg}</div>;
 }
-
+ 
 function parseLinks(text){
   const re=/\[([^\]]+)\]\(([^)]+)\)/g;
   const parts=[];let last=0,m,k=0;
@@ -245,7 +244,7 @@ function parseLinks(text){
   if(last<text.length)parts.push(<span key={k++}>{text.slice(last)}</span>);
   return parts;
 }
-
+ 
 function BudgetDonut({items,limit}){
   const total=items.reduce((s,i)=>s+i.p,0);
   const pct=Math.min(100,Math.round(total/limit*100));
@@ -283,7 +282,7 @@ function BudgetDonut({items,limit}){
     </div>
   );
 }
-
+ 
 function GiftCardStudio({rl,items,onClose,onToast}){
   const [tmpl,setTmpl]=useState(CARD_TEMPLATES[0]);
   const [msg,setMsg]=useState('');
@@ -292,7 +291,7 @@ function GiftCardStudio({rl,items,onClose,onToast}){
   const generateMsg=async()=>{
     setLoading(true);
     try{
-      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_KEY,'anthropic-version':'2023-06-01'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:200,messages:[{role:'user',content:`Write a heartfelt gift card message for a ${rl}. Fashion outfit worth ₹${total.toLocaleString()}. Theme: ${tmpl.label}. Under 35 words. Warm, Indian cultural tone. No quotes, just the message.`}]})});
+      const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:200,messages:[{role:'user',content:`Write a heartfelt gift card message for a ${rl}. Fashion outfit worth ₹${total.toLocaleString()}. Theme: ${tmpl.label}. Under 35 words. Warm, Indian cultural tone. No quotes, just the message.`}]})});
       const d=await r.json();
       setMsg(d.content?.[0]?.text||'With love and warmth on this special day!');
     }catch{setMsg('With love and warmth on this special day! 🎁');}
@@ -325,7 +324,7 @@ function GiftCardStudio({rl,items,onClose,onToast}){
     </div>
   );
 }
-
+ 
 function SizeModal({gender,onClose}){
   const data=gender==='male'
     ?[{s:'S',c:'34-36"',w:'28-30"',sh:'7-8'},{s:'M',c:'38-40"',w:'32-34"',sh:'9'},{s:'L',c:'42-44"',w:'36-38"',sh:'10'},{s:'XL',c:'46-48"',w:'40-42"',sh:'11'},{s:'XXL',c:'50-52"',w:'44-46"',sh:'12'}]
@@ -356,7 +355,7 @@ function SizeModal({gender,onClose}){
     </div>
   );
 }
-
+ 
 /* ─── MAIN APP ─── */
 function App(){
   const [step,setStep]=useState(0);
@@ -383,22 +382,22 @@ function App(){
   const [searchQ,setSearchQ]=useState('');
   const [eventDate,setEventDate]=useState('');
   const chatEnd=useRef(null);
-
+ 
   const rg=sg==='male'?'female':'male';
   const rl=RECIPIENTS[sg||'male'].find(r=>r.id===rid)?.l||'';
   const cats=Object.keys(CATALOG[rg]);
   const activeCat=cat||cats[0];
   const total=items.reduce((s,i)=>s+i.p,0);
   const budgetLimit=budget==='low'?1000:budget==='medium'?5000:15000;
-
+ 
   useEffect(()=>{chatEnd.current?.scrollIntoView({behavior:'smooth'})},[msgs]);
   useEffect(()=>{if(cats.length&&(!cat||!cats.includes(cat)))setCat(cats[0])},[rg]);
-
+ 
   const daysLeft=useMemo(()=>{
     if(!eventDate)return null;
     return Math.ceil((new Date(eventDate)-new Date())/86400000);
   },[eventDate]);
-
+ 
   const isSel=id=>items.some(i=>i.id===id);
   const toggleItem=(item,category)=>{
     const singles=['👔 Tops','🥻 Tops','👖 Bottoms','👗 Bottoms','👟 Footwear','👠 Footwear'];
@@ -408,7 +407,7 @@ function App(){
       return[...prev,{...item,category}];
     });
   };
-
+ 
   const applyBundle=bundle=>{
     const allItems=Object.values(CATALOG[rg]).flat();
     const picked=bundle.items.map(id=>allItems.find(i=>i.id===id)).filter(Boolean);
@@ -423,7 +422,7 @@ function App(){
     setItems(result);setToast(`"${bundle.n}" applied! 🎉`);
     sendMsg(`I applied the "${bundle.n}" bundle: ${picked.map(i=>i.n).join(', ')}. Thoughts?`);
   };
-
+ 
   const surpriseMe=()=>{
     const newItems=[];
     cats.forEach(c=>{
@@ -433,7 +432,7 @@ function App(){
     setItems(newItems);setToast('Surprise outfit applied! 🎲');
     if(newItems.length)sendMsg(`Surprise ${occasion} outfit: ${newItems.map(i=>i.n).join(', ')}. Rate it for my ${rl}!`);
   };
-
+ 
   const sendMsg=async(text)=>{
     if(!text.trim()||aiLoading)return;
     const nm={role:'user',content:text};
@@ -443,29 +442,29 @@ function App(){
       const bodyTip=bodyType?BODY_TYPES[rg]?.find(b=>b.id===bodyType)?.tip:'';
       const sys=`You are GiftFit AI, a warm expert Indian fashion & gifting stylist. User (${sg}) shopping for ${rl} (${rg}). Occasion: ${occasion}. Budget: ${budget==='low'?'under ₹1000':budget==='medium'?'₹1000–₹5000':'above ₹5000'}. Body type advice: ${bodyTip||'not specified'}. Avatar items: ${outfit}. Include 2-3 Amazon India product links as [Name](https://www.amazon.in/s?k=terms). Be warm, culturally Indian, concise (≤130 words). 1-2 emojis naturally.`;
       const history=[...msgs,nm].map(m=>({role:m.role,content:m.content}));
-      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_KEY,'anthropic-version':'2023-06-01'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys,messages:history})});
+      const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys,messages:history})});
       const d=await r.json();
       setMsgs(p=>[...p,{role:'assistant',content:d.content?.[0]?.text||'Try again!'}]);
     }catch{setMsgs(p=>[...p,{role:'assistant',content:"Couldn't connect. Try again."}]);}
     setAiLoading(false);
   };
-
+ 
   const saveOutfit=()=>{
     if(!items.length)return;
     const name=outfitName.trim()||`${rl}'s ${occasion} Look`;
     setSaved(p=>[...p,{name,items:[...items],occasion,id:Date.now(),total}]);
     setOutfitName('');setToast(`"${name}" saved! 💾`);
   };
-
+ 
   const shareOutfit=()=>{
     const text=`👗 GiftFit – ${rl}'s ${occasion} Outfit\n\n${items.map(i=>`• ${i.n} – ₹${i.p.toLocaleString()}`).join('\n')}\n\nTotal: ₹${total.toLocaleString()}\n\nBuilt on GiftFit 🎁`;
     navigator.clipboard?.writeText(text).then(()=>setToast('Copied to clipboard! 📋'));
   };
-
+ 
   const Btn=({children,active,onClick,style={},...p})=>(
     <button onClick={onClick} {...p} style={{background:active?ACF:CARD,border:`1px solid ${active?AC:BRD}`,borderRadius:'8px',padding:'0.3rem 0.55rem',cursor:'pointer',color:active?ACL:MUT,fontSize:'0.67rem',fontWeight:active?'700':'400',transition:'all 0.15s',...style}}>{children}</button>
   );
-
+ 
   const filteredCatItems=useMemo(()=>{
     let arr=CATALOG[rg][activeCat]||[];
     if(searchQ){const q=searchQ.toLowerCase();arr=arr.filter(i=>i.n.toLowerCase().includes(q));}
@@ -474,7 +473,7 @@ function App(){
     if(filter==='trending')arr=arr.filter(i=>i.trending);
     return arr;
   },[activeCat,filter,searchQ,occasion,budgetLimit,rg]);
-
+ 
   /* ── ONBOARDING ── */
   if(step===0)return(
     <div className="fade" style={{background:BG,minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem',textAlign:'center'}}>
@@ -494,7 +493,7 @@ function App(){
       </div>
     </div>
   );
-
+ 
   if(step===1)return(
     <div className="fade" style={{background:BG,minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'2rem'}}>
       <div style={{maxWidth:'380px',width:'100%'}}>
@@ -515,7 +514,7 @@ function App(){
       </div>
     </div>
   );
-
+ 
   if(step===2)return(
     <div className="fade" style={{background:BG,minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'2rem'}}>
       <div style={{maxWidth:'420px',width:'100%'}}>
@@ -534,7 +533,7 @@ function App(){
       </div>
     </div>
   );
-
+ 
   if(step===3)return(
     <div className="fade" style={{background:BG,minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'2rem'}}>
       <div style={{maxWidth:'520px',width:'100%'}}>
@@ -570,7 +569,7 @@ function App(){
       </div>
     </div>
   );
-
+ 
   if(step===4)return(
     <div className="fade" style={{background:BG,minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'2rem'}}>
       <div style={{maxWidth:'440px',width:'100%'}}>
@@ -593,14 +592,14 @@ function App(){
       </div>
     </div>
   );
-
+ 
   /* ── MAIN ROOM ── */
   return(
     <div className="fade" style={{background:BG,height:'100vh',display:'flex',flexDirection:'column',overflow:'hidden'}}>
       {toast&&<Toast msg={toast} onDone={()=>setToast(null)}/>}
       {showSize&&<SizeModal gender={rg} onClose={()=>setShowSize(false)}/>}
       {showCard&&<GiftCardStudio rl={rl} items={items} onClose={()=>setShowCard(false)} onToast={setToast}/>}
-
+ 
       {/* Header */}
       <div style={{background:CARD,borderBottom:`1px solid ${BRD}`,padding:'0.48rem 0.85rem',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,gap:'0.45rem'}}>
         <div style={{display:'flex',alignItems:'center',gap:'0.65rem',minWidth:0}}>
@@ -623,10 +622,10 @@ function App(){
           </>}
         </div>
       </div>
-
+ 
       {/* 3-Column Body */}
       <div style={{flex:1,display:'grid',gridTemplateColumns:'216px 170px 1fr',overflow:'hidden'}}>
-
+ 
         {/* LEFT */}
         <div style={{borderRight:`1px solid ${BRD}`,display:'flex',flexDirection:'column',overflow:'hidden'}}>
           <div style={{display:'flex',borderBottom:`1px solid ${BRD}`,flexShrink:0,background:'rgba(0,0,0,0.12)'}}>
@@ -634,7 +633,7 @@ function App(){
               <button key={p.id} onClick={()=>setPanel(p.id)} style={{flex:1,padding:'0.5rem 0.1rem',background:'transparent',border:'none',borderBottom:`2px solid ${panel===p.id?AC:'transparent'}`,color:panel===p.id?ACL:MUT,fontSize:'0.6rem',cursor:'pointer',fontWeight:panel===p.id?'700':'400',transition:'all 0.12s'}}>{p.l}</button>
             ))}
           </div>
-
+ 
           {panel==='shop'&&<>
             <div style={{padding:'0.4rem 0.5rem',borderBottom:`1px solid ${BRD}`,flexShrink:0}}>
               <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="Search items…" style={{width:'100%',background:'rgba(255,255,255,0.04)',border:`1px solid ${BRD}`,borderRadius:'8px',padding:'0.35rem 0.6rem',color:'#EEEAE4',fontSize:'0.68rem'}}/>
@@ -663,7 +662,7 @@ function App(){
               </div>
             </div>
           </>}
-
+ 
           {panel==='bundles'&&(
             <div style={{flex:1,overflow:'auto',padding:'0.55rem',display:'flex',flexDirection:'column',gap:'0.45rem'}}>
               <p style={{color:MUT,fontSize:'0.6rem',textTransform:'uppercase',letterSpacing:'0.1em',fontWeight:'600',marginBottom:'0.1rem'}}>Ready-made outfit sets</p>
@@ -682,7 +681,7 @@ function App(){
               ))}
             </div>
           )}
-
+ 
           {panel==='brands'&&(
             <div style={{flex:1,overflow:'auto',padding:'0.55rem',display:'flex',flexDirection:'column',gap:'0.4rem'}}>
               <p style={{color:MUT,fontSize:'0.6rem',textTransform:'uppercase',letterSpacing:'0.1em',fontWeight:'600',marginBottom:'0.1rem'}}>Indian fashion brands</p>
@@ -699,7 +698,7 @@ function App(){
               </div>
             </div>
           )}
-
+ 
           {panel==='saved'&&(
             <div style={{flex:1,overflow:'auto',padding:'0.55rem',display:'flex',flexDirection:'column',gap:'0.4rem'}}>
               {saved.length===0
@@ -718,7 +717,7 @@ function App(){
               }
             </div>
           )}
-
+ 
           {items.length>0&&(
             <div style={{padding:'0.5rem',borderTop:`1px solid ${BRD}`,flexShrink:0,background:'rgba(0,0,0,0.2)'}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.35rem'}}>
@@ -741,7 +740,7 @@ function App(){
             </div>
           )}
         </div>
-
+ 
         {/* CENTER: Avatar */}
         <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'space-between',padding:'0.65rem 0.45rem',borderRight:`1px solid ${BRD}`,background:'rgba(255,255,255,0.008)',overflow:'hidden',gap:'0.45rem'}}>
           <div style={{background:CARD,borderRadius:'16px',border:`1px solid ${BRD}`,padding:'0.7rem 0.55rem',width:'100%',flex:1,display:'flex',flexDirection:'column',alignItems:'center',boxShadow:'0 10px 36px rgba(0,0,0,0.35)'}}>
@@ -764,7 +763,7 @@ function App(){
             <button onClick={()=>setRightTab('budget')} style={{background:'transparent',border:`1px solid ${BRD}`,color:MUT,borderRadius:'8px',padding:'0.38rem',cursor:'pointer',fontSize:'0.6rem'}} onMouseEnter={e=>{e.currentTarget.style.borderColor=AC;e.currentTarget.style.color=ACL}} onMouseLeave={e=>{e.currentTarget.style.borderColor=BRD;e.currentTarget.style.color=MUT}}>📊 Budget Chart</button>
           </div>
         </div>
-
+ 
         {/* RIGHT */}
         <div style={{display:'flex',flexDirection:'column',overflow:'hidden'}}>
           <div style={{display:'flex',background:CARD,borderBottom:`1px solid ${BRD}`,flexShrink:0}}>
@@ -772,9 +771,9 @@ function App(){
               <button key={t.id} onClick={()=>setRightTab(t.id)} style={{flex:1,padding:'0.5rem 0.3rem',background:'transparent',border:'none',borderBottom:`2px solid ${rightTab===t.id?AC:'transparent'}`,color:rightTab===t.id?ACL:MUT,fontSize:'0.65rem',cursor:'pointer',fontWeight:rightTab===t.id?'700':'400',transition:'all 0.12s'}}>{t.l}</button>
             ))}
           </div>
-
+ 
           {rightTab==='budget'&&<div style={{flex:1,overflow:'auto'}}><BudgetDonut items={items} limit={budgetLimit}/></div>}
-
+ 
           {rightTab==='avatar'&&(
             <div style={{flex:1,overflow:'auto',padding:'0.75rem',display:'flex',flexDirection:'column',gap:'0.85rem'}}>
               <div>
@@ -796,7 +795,7 @@ function App(){
               </div>
             </div>
           )}
-
+ 
           {rightTab==='chat'&&<>
             <div style={{flex:1,overflow:'auto',padding:'0.75rem',display:'flex',flexDirection:'column',gap:'0.6rem'}}>
               {msgs.map((m,i)=>(
@@ -829,9 +828,10 @@ function App(){
     </div>
   );
 }
-
+ 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 {% endraw %}
 </script>
 </body>
 </html>
+ 
