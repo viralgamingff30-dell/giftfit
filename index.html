@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GiftFit – Virtual Try-On & AI Style Advisor</title>
+<meta name="description" content="Shop for the opposite gender with confidence. Virtual avatar try-on, AI style advice, and direct Amazon India buy links."/>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body,#root{height:100%;width:100%;overflow:hidden}
+body{background:#0A0A10;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#EEEAE4}
+::-webkit-scrollbar{width:3px;height:3px}
+::-webkit-scrollbar-thumb{background:rgba(201,145,106,0.25);border-radius:4px}
+::-webkit-scrollbar-track{background:transparent}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes blink{0%,100%{opacity:0.2}55%{opacity:1}}
+@keyframes pop{0%{transform:scale(0.88);opacity:0}100%{transform:scale(1);opacity:1}}
+.fade{animation:fadeUp 0.3s ease both}
+.pop{animation:pop 0.22s ease both}
+.blink{animation:blink 1.1s infinite}
+input,textarea,select{outline:none;font-family:inherit}
+input:focus,textarea:focus{border-color:rgba(201,145,106,0.5)!important}
+button:active{transform:scale(0.96)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const ANTHROPIC_KEY='{{ api_key }}';
+{% raw %}
+const {useState,useRef,useEffect,useMemo}=React;
+const AC='#C9916A',ACL='#EAD0B0',ACF='rgba(201,145,106,0.09)',BG='#0A0A10',CARD='#121219',CARD2='#181824',MUT='#6A6378',BRD='rgba(255,255,255,0.065)';
+
+/* ─── DATA ─── */
+const SKIN=[{id:'fair',c:'#FDDBB4',l:'Fair'},{id:'wheatish',c:'#E8B882',l:'Wheatish'},{id:'medium',c:'#C8895A',l:'Medium'},{id:'tan',c:'#A0622E',l:'Tan'},{id:'deep',c:'#7A3E18',l:'Deep'}];
+const HAIR=[{id:'black',c:'#100A04'},{id:'brown',c:'#4A2810'},{id:'auburn',c:'#7B1F1F'},{id:'blonde',c:'#C8A030'},{id:'grey',c:'#909090'},{id:'dyed',c:'#1A3A8A'}];
+const BODY_TYPES={
+  male:[{id:'slim',l:'Slim',tip:'Layered looks & slim-fit. Avoid oversized.'},{id:'athletic',l:'Athletic',tip:'Fitted styles show your build. V-necks work great.'},{id:'average',l:'Average',tip:'Most styles suit you. Straight-fit is your friend.'},{id:'broad',l:'Broad / Heavy',tip:'Dark colours & vertical patterns slim you down.'}],
+  female:[{id:'slim',l:'Slim / Petite',tip:'Flared skirts & A-lines add volume beautifully.'},{id:'hourglass',l:'Hourglass',tip:'Fitted waist styles highlight your curves.'},{id:'average',l:'Average',tip:'Almost everything suits you! Try wrap styles.'},{id:'plus',l:'Plus Size',tip:'Empire waist & flowy fabrics are flattering.'}]
+};
+const BRANDS={
+  male:[{n:'Manyavar',url:'https://www.manyavar.com/',cat:'Ethnic'},{n:'Fabindia',url:'https://www.fabindia.com/men',cat:'Ethnic'},{n:'Van Heusen',url:'https://www.amazon.in/s?k=van+heusen+men',cat:'Formal'},{n:'Peter England',url:'https://www.amazon.in/s?k=peter+england+men',cat:'Formal'},{n:'Jack & Jones',url:'https://www.amazon.in/s?k=jack+jones+men',cat:'Casual'},{n:'Roadster',url:'https://www.myntra.com/roadster',cat:'Casual'},{n:'Puma India',url:'https://www.amazon.in/s?k=puma+men+india',cat:'Sport'}],
+  female:[{n:'W',url:'https://www.wforwoman.com/',cat:'Ethnic'},{n:'Biba',url:'https://www.biba.in/',cat:'Ethnic'},{n:'Fabindia',url:'https://www.fabindia.com/women',cat:'Ethnic'},{n:'AND',url:'https://www.andstyle.com/',cat:'Western'},{n:'Libas',url:'https://www.amazon.in/s?k=libas+women',cat:'Ethnic'},{n:'Anouk (Myntra)',url:'https://www.myntra.com/anouk',cat:'Fusion'},{n:'Aurelia',url:'https://www.amazon.in/s?k=aurelia+women',cat:'Ethnic'},{n:'HRX',url:'https://www.amazon.in/s?k=hrx+women',cat:'Sport'}]
+};
+const BUNDLES={
+  male:[
+    {id:'wedding_guest_m',n:'Wedding Guest',emoji:'🎊',items:['formal_shirt','formal_trousers','oxford','watch_m','belt_m','pocket_sq'],total:5394,tags:['wedding','festive']},
+    {id:'casual_day_m',n:'Casual Day Out',emoji:'☀️',items:['polo','chinos','white_sneak','cap_m'],total:2492,tags:['casual','daily']},
+    {id:'festive_ethnic_m',n:'Festive Ethnic',emoji:'🪔',items:['kurta','dhoti','kolhapuri_m','watch_m'],total:3896,tags:['festive','wedding']},
+    {id:'party_night_m',n:'Party Night',emoji:'🌙',items:['blazer','slim_jeans','loafers','sunglasses_m'],total:4797,tags:['party']},
+    {id:'sherwani_look',n:'Groom / Sangeet',emoji:'🤵',items:['sherwani','dhoti','mojdi','watch_m'],total:7697,tags:['wedding']},
+  ],
+  female:[
+    {id:'wedding_guest_f',n:'Wedding Guest',emoji:'🎊',items:['silk_saree','jutis_f','jhumka','necklace_f','bangles_f'],total:7396,tags:['wedding','festive']},
+    {id:'casual_chic',n:'Casual Chic',emoji:'☀️',items:['coord_set','jeans_f','flats_f','handbag_f'],total:5296,tags:['casual','party']},
+    {id:'festive_look',n:'Festive Ethnic',emoji:'🪔',items:['anarkali','palazzo','jutis_f','jhumka','dupatta_f','bangles_f'],total:5294,tags:['festive']},
+    {id:'party_queen',n:'Party Queen',emoji:'🌙',items:['dress_f','stiletto','clutch','jhumka'],total:4396,tags:['party']},
+    {id:'bridal_look',n:'Bridal Look',emoji:'👰',items:['lehenga','jutis_f','jhumka','necklace_f','bangles_f','maang_f','dupatta_f'],total:10490,tags:['wedding']},
+  ]
+};
+const CATALOG={
+  male:{
+    '👔 Tops':[
+      {id:'formal_shirt',n:'Formal Shirt',c:'#2E6DB4',p:1299,url:'https://www.amazon.in/s?k=men+formal+shirt',tags:['formal','wedding'],trending:false},
+      {id:'polo',n:'Polo T-Shirt',c:'#2D5A3D',p:599,url:'https://www.amazon.in/s?k=men+polo+tshirt',tags:['casual','daily'],trending:true},
+      {id:'kurta',n:'Ethnic Kurta',c:'#A05C2A',p:899,url:'https://www.amazon.in/s?k=men+cotton+kurta',tags:['festive','casual'],trending:true},
+      {id:'blazer',n:'Slim Blazer',c:'#1C2B3A',p:2499,url:'https://www.amazon.in/s?k=men+slim+blazer',tags:['formal','party'],trending:false},
+      {id:'hoodie',n:'Fleece Hoodie',c:'#3A3A5A',p:999,url:'https://www.amazon.in/s?k=men+fleece+hoodie',tags:['casual','daily'],trending:true},
+      {id:'sherwani',n:'Sherwani',c:'#8B0000',p:5999,url:'https://www.amazon.in/s?k=men+sherwani',tags:['wedding','festive'],trending:false},
+      {id:'nehru',n:'Nehru Jacket',c:'#1A4A2A',p:1699,url:'https://www.amazon.in/s?k=men+nehru+jacket',tags:['festive','party'],trending:true},
+      {id:'linen',n:'Linen Shirt',c:'#D4BC94',p:1099,url:'https://www.amazon.in/s?k=men+linen+shirt',tags:['casual','party'],trending:false},
+    ],
+    '👖 Bottoms':[
+      {id:'slim_jeans',n:'Slim Jeans',c:'#1A3A5C',p:1199,url:'https://www.amazon.in/s?k=men+slim+fit+jeans',tags:['casual','party'],trending:true},
+      {id:'formal_trousers',n:'Formal Trousers',c:'#2A2018',p:999,url:'https://www.amazon.in/s?k=men+formal+trousers',tags:['formal','wedding'],trending:false},
+      {id:'chinos',n:'Stretch Chinos',c:'#C8A870',p:1099,url:'https://www.amazon.in/s?k=men+stretch+chinos',tags:['casual','formal'],trending:false},
+      {id:'track',n:'Track Pants',c:'#1A1A2E',p:699,url:'https://www.amazon.in/s?k=men+track+pants',tags:['daily','casual'],trending:false},
+      {id:'dhoti',n:'Silk Dhoti',c:'#F5F5DC',p:799,url:'https://www.amazon.in/s?k=men+silk+dhoti',tags:['festive','wedding'],trending:false},
+      {id:'jogger',n:'Jogger Pants',c:'#3A3A4A',p:899,url:'https://www.amazon.in/s?k=men+jogger+pants',tags:['casual','daily'],trending:true},
+    ],
+    '👟 Footwear':[
+      {id:'oxford',n:'Oxford Shoes',c:'#200E06',p:1899,url:'https://www.amazon.in/s?k=men+oxford+shoes',tags:['formal','wedding'],trending:false},
+      {id:'white_sneak',n:'White Sneakers',c:'#EEEEEE',p:1499,url:'https://www.amazon.in/s?k=men+white+sneakers',tags:['casual','party'],trending:true},
+      {id:'loafers',n:'Suede Loafers',c:'#7A3820',p:1299,url:'https://www.amazon.in/s?k=men+suede+loafers',tags:['casual','party'],trending:false},
+      {id:'kolhapuri_m',n:'Kolhapuri',c:'#C8782A',p:799,url:'https://www.amazon.in/s?k=kolhapuri+sandals+men',tags:['festive','wedding'],trending:false},
+      {id:'chelsea',n:'Chelsea Boots',c:'#1A0A04',p:2299,url:'https://www.amazon.in/s?k=men+chelsea+boots',tags:['casual','formal'],trending:true},
+      {id:'mojdi',n:'Punjabi Mojdi',c:'#C8A030',p:899,url:'https://www.amazon.in/s?k=men+punjabi+mojdi',tags:['festive','wedding'],trending:false},
+    ],
+    '⌚ Accessories':[
+      {id:'watch_m',n:'Analog Watch',c:'#B08030',p:3499,url:'https://www.amazon.in/s?k=men+analog+watch',tags:['formal','casual'],trending:false},
+      {id:'wallet_m',n:'Bifold Wallet',c:'#4A2010',p:699,url:'https://www.amazon.in/s?k=men+leather+wallet',tags:['daily','casual'],trending:false},
+      {id:'belt_m',n:'Leather Belt',c:'#1A1A1A',p:499,url:'https://www.amazon.in/s?k=men+leather+belt',tags:['formal','casual'],trending:false},
+      {id:'cap_m',n:'Dad Cap',c:'#1A1A2E',p:399,url:'https://www.amazon.in/s?k=men+dad+cap',tags:['casual','daily'],trending:true},
+      {id:'sunglasses_m',n:'Aviators',c:'#0A0A0A',p:599,url:'https://www.amazon.in/s?k=men+aviator+sunglasses',tags:['casual','party'],trending:true},
+      {id:'perfume_m',n:'Perfume',c:'#3A6A4A',p:1299,url:'https://www.amazon.in/s?k=men+perfume+gift',tags:['festive','wedding','party'],trending:false},
+      {id:'pocket_sq',n:'Pocket Square',c:'#8B1A1A',p:299,url:'https://www.amazon.in/s?k=men+pocket+square',tags:['formal','wedding'],trending:false},
+    ]
+  },
+  female:{
+    '🥻 Tops':[
+      {id:'silk_saree',n:'Silk Saree',c:'#C0356A',p:3499,url:'https://www.amazon.in/s?k=women+silk+saree',tags:['festive','wedding'],trending:false},
+      {id:'kurti_f',n:'Designer Kurti',c:'#D44090',p:999,url:'https://www.amazon.in/s?k=women+designer+kurti',tags:['casual','daily'],trending:true},
+      {id:'dress_f',n:'Western Dress',c:'#5A50D4',p:1499,url:'https://www.amazon.in/s?k=women+western+dress',tags:['party','casual'],trending:true},
+      {id:'anarkali',n:'Anarkali Suit',c:'#D06020',p:2199,url:'https://www.amazon.in/s?k=women+anarkali+suit',tags:['festive','party'],trending:false},
+      {id:'lehenga',n:'Bridal Lehenga',c:'#9020A0',p:5999,url:'https://www.amazon.in/s?k=women+bridal+lehenga',tags:['wedding'],trending:false},
+      {id:'top_jeans',n:'Crop Top',c:'#FF4A6A',p:699,url:'https://www.amazon.in/s?k=women+crop+top',tags:['casual','party'],trending:true},
+      {id:'indo_western',n:'Indo-Western',c:'#208080',p:1999,url:'https://www.amazon.in/s?k=women+indo+western',tags:['party','festive'],trending:true},
+      {id:'coord_set',n:'Co-ord Set',c:'#E87040',p:1299,url:'https://www.amazon.in/s?k=women+coord+set',tags:['casual','party'],trending:true},
+    ],
+    '👗 Bottoms':[
+      {id:'palazzo',n:'Palazzo Pants',c:'#5850CC',p:799,url:'https://www.amazon.in/s?k=women+palazzo+pants',tags:['casual','daily'],trending:false},
+      {id:'leggings_f',n:'Cotton Leggings',c:'#1E2030',p:499,url:'https://www.amazon.in/s?k=women+cotton+leggings',tags:['daily','casual'],trending:false},
+      {id:'jeans_f',n:'Skinny Jeans',c:'#1A3050',p:1099,url:'https://www.amazon.in/s?k=women+skinny+jeans',tags:['casual','party'],trending:false},
+      {id:'skirt_f',n:'Flared Skirt',c:'#F090C0',p:799,url:'https://www.amazon.in/s?k=women+flared+skirt',tags:['casual','party'],trending:true},
+      {id:'sharara',n:'Sharara Set',c:'#CC3040',p:1799,url:'https://www.amazon.in/s?k=women+sharara+set',tags:['festive','wedding'],trending:true},
+      {id:'salwar',n:'Patiala Salwar',c:'#208840',p:899,url:'https://www.amazon.in/s?k=women+patiala+salwar',tags:['casual','festive'],trending:false},
+    ],
+    '👠 Footwear':[
+      {id:'heels_f',n:'Block Heels',c:'#B02020',p:1299,url:'https://www.amazon.in/s?k=women+block+heels',tags:['party','formal'],trending:false},
+      {id:'flats_f',n:'Ballet Flats',c:'#F090A0',p:799,url:'https://www.amazon.in/s?k=women+ballet+flats',tags:['casual','daily'],trending:false},
+      {id:'wedges_f',n:'Wedge Sandals',c:'#806040',p:1099,url:'https://www.amazon.in/s?k=women+wedge+sandals',tags:['casual','party'],trending:false},
+      {id:'jutis_f',n:'Embroidered Jutis',c:'#B88020',p:999,url:'https://www.amazon.in/s?k=women+embroidered+jutis',tags:['festive','wedding'],trending:true},
+      {id:'kolhapuri_f',n:'Kolhapuri',c:'#C08020',p:699,url:'https://www.amazon.in/s?k=women+kolhapuri+sandals',tags:['casual','festive'],trending:false},
+      {id:'stiletto',n:'Stiletto Heels',c:'#1A0A0A',p:1799,url:'https://www.amazon.in/s?k=women+stiletto+heels',tags:['party','formal'],trending:true},
+    ],
+    '💎 Accessories':[
+      {id:'jhumka',n:'Jhumka Earrings',c:'#D4A010',p:699,url:'https://www.amazon.in/s?k=women+jhumka+earrings',tags:['festive','wedding'],trending:true},
+      {id:'necklace_f',n:'Gold Necklace Set',c:'#C89020',p:1499,url:'https://www.amazon.in/s?k=women+gold+plated+necklace+set',tags:['festive','wedding'],trending:false},
+      {id:'bangles_f',n:'Bangles Set',c:'#D05020',p:499,url:'https://www.amazon.in/s?k=women+bangles+set',tags:['festive','wedding','casual'],trending:false},
+      {id:'clutch',n:'Embroidered Clutch',c:'#5A3020',p:899,url:'https://www.amazon.in/s?k=women+embroidered+clutch',tags:['party','wedding'],trending:false},
+      {id:'dupatta_f',n:'Embroidered Dupatta',c:'#6830A0',p:699,url:'https://www.amazon.in/s?k=women+embroidered+dupatta',tags:['festive','wedding'],trending:false},
+      {id:'maang_f',n:'Maang Tikka',c:'#D4A010',p:599,url:'https://www.amazon.in/s?k=maang+tikka+set',tags:['wedding','festive'],trending:false},
+      {id:'perfume_f',n:'Perfume',c:'#C860A0',p:1099,url:'https://www.amazon.in/s?k=women+perfume+gift+set',tags:['party','festive','wedding'],trending:false},
+      {id:'handbag_f',n:'Tote Handbag',c:'#6A3A20',p:1999,url:'https://www.amazon.in/s?k=women+tote+handbag',tags:['casual','daily'],trending:true},
+    ]
+  }
+};
+const RECIPIENTS={
+  male:[{id:'mother',l:'Mother',e:'👩‍🦳'},{id:'sister',l:'Sister',e:'👧'},{id:'wife',l:'Wife',e:'👰'},{id:'girlfriend',l:'Girlfriend',e:'💝'},{id:'daughter',l:'Daughter',e:'🧒'},{id:'friend_f',l:'Friend (F)',e:'🤝'}],
+  female:[{id:'father',l:'Father',e:'👨‍🦳'},{id:'brother',l:'Brother',e:'🧑'},{id:'husband',l:'Husband',e:'🤵'},{id:'boyfriend',l:'Boyfriend',e:'💝'},{id:'son',l:'Son',e:'🧒'},{id:'friend_m',l:'Friend (M)',e:'🤝'}]
+};
+const OCCASIONS=['Casual','Formal','Festive','Party','Wedding','Daily'];
+const BUDGETS=[{id:'low',l:'< ₹1,000'},{id:'medium',l:'₹1k – ₹5k'},{id:'high',l:'₹5,000+'}];
+const CARD_TEMPLATES=[
+  {id:'love',bg:'linear-gradient(135deg,#C0356A,#7A1040)',emoji:'❤️',label:'With Love'},
+  {id:'birthday',bg:'linear-gradient(135deg,#C8A030,#7A5010)',emoji:'🎂',label:'Birthday'},
+  {id:'festival',bg:'linear-gradient(135deg,#E87040,#8B3010)',emoji:'🪔',label:'Festival'},
+  {id:'anniversary',bg:'linear-gradient(135deg,#5850CC,#2A2060)',emoji:'💍',label:'Anniversary'},
+  {id:'thankyou',bg:'linear-gradient(135deg,#208840,#104820)',emoji:'🙏',label:'Thank You'},
+];
+
+/* ─── Avatars ─── */
+function MaleAvatar({items,skin,hair}){
+  const sc=SKIN.find(s=>s.id===skin)?.c||'#C8895A',hc=HAIR.find(h=>h.id===hair)?.c||'#100A04';
+  const g=id=>items.find(i=>i.id===id);
+  const top=items.find(i=>CATALOG.male['👔 Tops'].some(x=>x.id===i.id));
+  const bot=items.find(i=>CATALOG.male['👖 Bottoms'].some(x=>x.id===i.id));
+  const shoe=items.find(i=>CATALOG.male['👟 Footwear'].some(x=>x.id===i.id));
+  const tc=top?.c||'#252535',bc=bot?.c||'#1E1E30',shc=shoe?.c||'#202028';
+  return(
+    <svg viewBox="0 0 160 310" xmlns="http://www.w3.org/2000/svg" style={{width:'100%',height:'100%'}}>
+      {g('cap_m')&&<><ellipse cx="80" cy="23" rx="32" ry="13" fill={g('cap_m').c}/><rect x="48" y="25" width="64" height="9" rx="3" fill={g('cap_m').c}/></>}
+      <ellipse cx="80" cy="48" rx="24" ry="26" fill={sc}/>
+      {!g('cap_m')&&<><ellipse cx="80" cy="26" rx="24" ry="11" fill={hc}/><rect x="56" y="26" width="48" height="11" rx="6" fill={hc}/></>}
+      <ellipse cx="56" cy="48" rx="5" ry="6" fill={sc} opacity="0.9"/>
+      <ellipse cx="104" cy="48" rx="5" ry="6" fill={sc} opacity="0.9"/>
+      {g('sunglasses_m')&&<><rect x="62" y="43" rx="4" ry="4" width="14" height="10" fill={g('sunglasses_m').c} opacity="0.9"/><rect x="82" y="43" rx="4" ry="4" width="14" height="10" fill={g('sunglasses_m').c} opacity="0.9"/><line x1="76" y1="48" x2="82" y2="48" stroke="#555" strokeWidth="1.5"/></>}
+      <rect x="75" y="72" width="10" height="14" rx="3" fill={sc}/>
+      <rect x="46" y="85" width="68" height="82" rx="5" fill={tc}/>
+      {top?.id==='sherwani'&&<><rect x="68" y="85" width="24" height="82" fill="rgba(255,215,0,0.1)"/>{[92,106,120,134,148,162].map(y=><circle key={y} cx="80" cy={y} r="3" fill="rgba(255,215,0,0.55)"/>)}</>}
+      {top?.id==='blazer'&&<><rect x="60" y="85" width="20" height="82" fill="rgba(255,255,255,0.05)"/>{g('pocket_sq')&&<rect x="47" y="90" width="12" height="10" rx="2" fill={g('pocket_sq').c}/>}</>}
+      {top?.id==='kurta'&&<line x1="80" y1="85" x2="80" y2="167" stroke="rgba(0,0,0,0.16)" strokeWidth="2"/>}
+      <rect x="22" y="85" width="24" height="72" rx="10" fill={tc}/>
+      <rect x="114" y="85" width="24" height="72" rx="10" fill={tc}/>
+      <ellipse cx="34" cy="160" rx="10" ry="8" fill={sc}/>
+      <ellipse cx="126" cy="160" rx="10" ry="8" fill={sc}/>
+      {g('watch_m')&&<rect x="115" y="153" width="18" height="10" rx="3" fill={g('watch_m').c}/>}
+      {g('belt_m')&&<rect x="46" y="165" width="68" height="6" rx="3" fill={g('belt_m').c}/>}
+      <rect x="46" y="167" width="34" height="96" rx="3" fill={bc}/>
+      <rect x="80" y="167" width="34" height="96" rx="3" fill={bc} opacity="0.9"/>
+      <line x1="80" y1="167" x2="80" y2="263" stroke="rgba(0,0,0,0.12)" strokeWidth="2"/>
+      <ellipse cx="62" cy="268" rx="20" ry="8" fill={shc}/>
+      <ellipse cx="98" cy="268" rx="20" ry="8" fill={shc}/>
+      {shoe?.id==='chelsea'&&<><rect x="42" y="255" width="42" height="14" rx="5" fill={shc}/><rect x="76" y="255" width="42" height="14" rx="5" fill={shc}/></>}
+      {shoe?.id==='white_sneak'&&<><ellipse cx="62" cy="268" rx="20" ry="8" fill="#F0F0F0"/><ellipse cx="98" cy="268" rx="20" ry="8" fill="#F0F0F0"/></>}
+    </svg>
+  );
+}
+
+function FemaleAvatar({items,skin,hair}){
+  const sc=SKIN.find(s=>s.id===skin)?.c||'#C8895A',hc=HAIR.find(h=>h.id===hair)?.c||'#100A04';
+  const g=id=>items.find(i=>i.id===id);
+  const top=items.find(i=>CATALOG.female['🥻 Tops'].some(x=>x.id===i.id));
+  const bot=items.find(i=>CATALOG.female['👗 Bottoms'].some(x=>x.id===i.id));
+  const shoe=items.find(i=>CATALOG.female['👠 Footwear'].some(x=>x.id===i.id));
+  const tc=top?.c||'#C0356A',bc=bot?.c||'#5850CC',shc=shoe?.c||'#B02020';
+  const isHeels=!!(g('heels_f')||g('wedges_f')||g('stiletto'));
+  return(
+    <svg viewBox="0 0 160 325" xmlns="http://www.w3.org/2000/svg" style={{width:'100%',height:'100%'}}>
+      <ellipse cx="80" cy="33" rx="29" ry="35" fill={hc}/>
+      {g('maang_f')&&<><path d="M62 18 Q80 8 98 18" stroke={g('maang_f').c} strokeWidth="2.5" fill="none"/><circle cx="80" cy="14" r="6" fill={g('maang_f').c}/></>}
+      <ellipse cx="80" cy="43" rx="21" ry="23" fill={sc}/>
+      {g('jhumka')&&<><circle cx="59" cy="54" r="5" fill={g('jhumka').c}/><line x1="59" y1="59" x2="59" y2="72" stroke={g('jhumka').c} strokeWidth="2.5"/><circle cx="59" cy="74" r="4" fill={g('jhumka').c}/><circle cx="101" cy="54" r="5" fill={g('jhumka').c}/><line x1="101" y1="59" x2="101" y2="72" stroke={g('jhumka').c} strokeWidth="2.5"/><circle cx="101" cy="74" r="4" fill={g('jhumka').c}/></>}
+      <rect x="76" y="64" width="8" height="13" rx="3" fill={sc}/>
+      {g('necklace_f')&&<><path d="M60 80 Q80 93 100 80" stroke={g('necklace_f').c} strokeWidth="3.5" fill="none" strokeLinecap="round"/><circle cx="80" cy="92" r="4.5" fill={g('necklace_f').c}/></>}
+      {g('dupatta_f')&&<path d="M40 78 Q22 128 24 180" stroke={g('dupatta_f').c} strokeWidth="13" fill="none" strokeLinecap="round" opacity="0.7"/>}
+      <path d="M46 78 L114 78 L120 168 L40 168 Z" fill={tc}/>
+      {top?.id==='silk_saree'&&<path d="M42 78 Q18 115 20 180" stroke={tc} strokeWidth="20" fill="none" opacity="0.65" strokeLinecap="round"/>}
+      {top?.id==='lehenga'&&<><rect x="57" y="78" width="46" height="20" rx="2" fill="rgba(255,255,255,0.16)"/>{[88,98,108].map(y=><line key={y} x1="46" x2="114" y1={y} y2={y} stroke="rgba(255,215,0,0.18)" strokeWidth="1"/>)}</>}
+      <path d="M46 78 L22 82 L24 156 L46 163 Z" fill={tc}/>
+      <path d="M114 78 L138 82 L136 156 L114 163 Z" fill={tc}/>
+      <ellipse cx="32" cy="152" rx="9" ry="7" fill={sc}/>
+      <ellipse cx="128" cy="152" rx="9" ry="7" fill={sc}/>
+      {g('bangles_f')&&<ellipse cx="128" cy="146" rx="9" ry="8" stroke={g('bangles_f').c} strokeWidth="3.5" fill="none"/>}
+      {(g('clutch')||g('handbag_f'))&&(()=>{const b=g('clutch')||g('handbag_f');return(<><rect x="10" y="136" width="26" height="34" rx="8" fill={b.c}/><path d="M12 136 Q23 126 34 136" stroke={b.c} strokeWidth="3" fill="none"/></>);})()}
+      <path d="M40 166 L120 166 L128 288 L32 288 Z" fill={bc}/>
+      {bot?.id==='skirt_f'&&[188,208,228,248,268].map(y=><line key={y} x1={32+(y-166)*0.55} x2={128-(y-166)*0.55} y1={y} y2={y} stroke="rgba(255,255,255,0.07)" strokeWidth="1.5"/>)}
+      <ellipse cx="62" cy="294" rx="21" ry="8.5" fill={shc}/>
+      {isHeels&&<rect x="46" y="282" width="6" height="18" fill={shc}/>}
+      <rect x="41" y="280" width="42" height="10" rx="2" fill={shc} opacity="0.9"/>
+      <ellipse cx="98" cy="294" rx="21" ry="8.5" fill={shc}/>
+      {isHeels&&<rect x="106" y="282" width="6" height="18" fill={shc}/>}
+      <rect x="77" y="280" width="42" height="10" rx="2" fill={shc} opacity="0.9"/>
+    </svg>
+  );
+}
+
+/* ─── Helpers ─── */
+function Toast({msg,onDone}){
+  useEffect(()=>{const t=setTimeout(onDone,2400);return()=>clearTimeout(t)},[]);
+  return <div className="pop" style={{position:'fixed',bottom:'1.5rem',left:'50%',transform:'translateX(-50%)',background:'#1A3A1A',border:'1px solid #4CAF50',borderRadius:'10px',padding:'0.55rem 1.2rem',fontSize:'0.78rem',color:'#A5D6A7',zIndex:999,pointerEvents:'none',whiteSpace:'nowrap'}}>✓ {msg}</div>;
+}
+
+function parseLinks(text){
+  const re=/\[([^\]]+)\]\(([^)]+)\)/g;
+  const parts=[];let last=0,m,k=0;
+  while((m=re.exec(text))!==null){
+    if(m.index>last)parts.push(<span key={k++}>{text.slice(last,m.index)}</span>);
+    parts.push(<a key={k++} href={m[2]} target="_blank" rel="noreferrer" style={{color:AC,textDecoration:'underline',fontWeight:'500'}}>{m[1]} ↗</a>);
+    last=m.index+m[0].length;
+  }
+  if(last<text.length)parts.push(<span key={k++}>{text.slice(last)}</span>);
+  return parts;
+}
+
+function BudgetDonut({items,limit}){
+  const total=items.reduce((s,i)=>s+i.p,0);
+  const pct=Math.min(100,Math.round(total/limit*100));
+  const r=38,cx=50,cy=50,circ=2*Math.PI*r,dash=circ*pct/100;
+  const color=pct>100?'#FF6060':pct>80?'#F0A040':AC;
+  const cats={};
+  items.forEach(i=>{const c=i.category||'Other';cats[c]=(cats[c]||0)+i.p;});
+  const catColors=['#C9916A','#6A8EC9','#6AC99B','#C96A8E','#C9BE6A','#8E6AC9'];
+  return(
+    <div style={{padding:'0.75rem',display:'flex',flexDirection:'column',gap:'0.65rem'}}>
+      <div style={{display:'flex',alignItems:'center',gap:'1rem'}}>
+        <svg viewBox="0 0 100 100" style={{width:'90px',height:'90px',flexShrink:0}}>
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke={BRD} strokeWidth="10"/>
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth="10" strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" transform={`rotate(-90 ${cx} ${cy})`}/>
+          <text x={cx} y={cy-4} textAnchor="middle" fill={color} fontSize="14" fontWeight="800">{pct}%</text>
+          <text x={cx} y={cy+10} textAnchor="middle" fill={MUT} fontSize="7">used</text>
+        </svg>
+        <div>
+          <p style={{color:'#EEEAE4',fontSize:'0.85rem',fontWeight:'700',marginBottom:'0.1rem'}}>₹{total.toLocaleString()}</p>
+          <p style={{color:MUT,fontSize:'0.65rem'}}>of ₹{limit.toLocaleString()} budget</p>
+          {pct>100&&<p style={{color:'#FF9090',fontSize:'0.62rem',marginTop:'0.3rem'}}>⚠️ ₹{(total-limit).toLocaleString()} over</p>}
+        </div>
+      </div>
+      {Object.entries(cats).map(([cat,amt],i)=>(
+        <div key={cat}>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:'0.18rem'}}>
+            <span style={{fontSize:'0.62rem',color:MUT}}>{cat.split(' ').slice(1).join(' ')||cat}</span>
+            <span style={{fontSize:'0.62rem',color:catColors[i%catColors.length],fontWeight:'600'}}>₹{amt.toLocaleString()}</span>
+          </div>
+          <div style={{height:'3px',borderRadius:'3px',background:'rgba(255,255,255,0.05)'}}>
+            <div style={{height:'100%',borderRadius:'3px',width:`${Math.round(amt/total*100)}%`,background:catColors[i%catColors.length]}}/>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GiftCardStudio({rl,items,onClose,onToast}){
+  const [tmpl,setTmpl]=useState(CARD_TEMPLATES[0]);
+  const [msg,setMsg]=useState('');
+  const [loading,setLoading]=useState(false);
+  const total=items.reduce((s,i)=>s+i.p,0);
+  const generateMsg=async()=>{
+    setLoading(true);
+    try{
+      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_KEY,'anthropic-version':'2023-06-01'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:200,messages:[{role:'user',content:`Write a heartfelt gift card message for a ${rl}. Fashion outfit worth ₹${total.toLocaleString()}. Theme: ${tmpl.label}. Under 35 words. Warm, Indian cultural tone. No quotes, just the message.`}]})});
+      const d=await r.json();
+      setMsg(d.content?.[0]?.text||'With love and warmth on this special day!');
+    }catch{setMsg('With love and warmth on this special day! 🎁');}
+    setLoading(false);
+  };
+  const copyCard=()=>{
+    const text=`${tmpl.emoji} Gift for ${rl}\n\n${msg||'Wishing you joy!'}\n\nOutfit: ${items.map(i=>i.n).join(', ')}\nTotal: ₹${total.toLocaleString()}`;
+    navigator.clipboard?.writeText(text).then(()=>onToast('Gift card copied! 📋'));
+    onClose();
+  };
+  return(
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:500,padding:'1rem'}} onClick={onClose}>
+      <div className="pop" style={{background:CARD2,border:`1px solid ${BRD}`,borderRadius:'18px',padding:'1.5rem',maxWidth:'400px',width:'100%',maxHeight:'90vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1.2rem'}}>
+          <h3 style={{fontFamily:'Georgia,serif',fontSize:'1.1rem',color:ACL}}>🎁 Gift Card Studio</h3>
+          <button onClick={onClose} style={{background:'transparent',border:'none',color:MUT,cursor:'pointer',fontSize:'1.2rem'}}>✕</button>
+        </div>
+        <div style={{display:'flex',gap:'0.4rem',flexWrap:'wrap',marginBottom:'1rem'}}>
+          {CARD_TEMPLATES.map(t=><button key={t.id} onClick={()=>setTmpl(t)} style={{background:tmpl.id===t.id?t.bg:'rgba(255,255,255,0.04)',border:`1.5px solid ${tmpl.id===t.id?'rgba(255,255,255,0.3)':BRD}`,borderRadius:'8px',padding:'0.4rem 0.7rem',cursor:'pointer',color:'#EEEAE4',fontSize:'0.68rem'}}>{t.emoji} {t.label}</button>)}
+        </div>
+        <div style={{background:tmpl.bg,borderRadius:'14px',padding:'1.5rem',marginBottom:'1rem',textAlign:'center',minHeight:'110px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'0.5rem'}}>
+          <span style={{fontSize:'2.2rem'}}>{tmpl.emoji}</span>
+          <p style={{color:'rgba(255,255,255,0.95)',fontSize:'0.85rem',lineHeight:'1.7',fontStyle:'italic',minHeight:'40px'}}>{loading?'Writing…':msg||`A special outfit for my dear ${rl} 💝`}</p>
+          <p style={{color:'rgba(255,255,255,0.55)',fontSize:'0.62rem'}}>₹{total.toLocaleString()}</p>
+        </div>
+        <button onClick={generateMsg} disabled={loading} style={{background:ACF,border:`1px solid rgba(201,145,106,0.3)`,color:ACL,borderRadius:'10px',padding:'0.6rem',width:'100%',cursor:'pointer',fontSize:'0.78rem',fontWeight:'600',marginBottom:'0.6rem'}}>{loading?'✨ Writing…':'✨ AI Generate Message'}</button>
+        <textarea value={msg} onChange={e=>setMsg(e.target.value)} placeholder="Or write your own…" style={{width:'100%',background:'rgba(255,255,255,0.04)',border:`1px solid ${BRD}`,borderRadius:'10px',padding:'0.7rem',color:'#EEEAE4',fontSize:'0.78rem',resize:'vertical',minHeight:'65px',lineHeight:'1.65',marginBottom:'0.75rem'}}/>
+        <button onClick={copyCard} style={{background:`linear-gradient(135deg,${AC},#9B5A30)`,color:'#150800',border:'none',borderRadius:'12px',padding:'0.8rem',width:'100%',cursor:'pointer',fontSize:'0.88rem',fontWeight:'900'}}>📋 Copy Gift Card</button>
+      </div>
+    </div>
+  );
+}
+
+function SizeModal({gender,onClose}){
+  const data=gender==='male'
+    ?[{s:'S',c:'34-36"',w:'28-30"',sh:'7-8'},{s:'M',c:'38-40"',w:'32-34"',sh:'9'},{s:'L',c:'42-44"',w:'36-38"',sh:'10'},{s:'XL',c:'46-48"',w:'40-42"',sh:'11'},{s:'XXL',c:'50-52"',w:'44-46"',sh:'12'}]
+    :[{s:'XS',b:'32"',w:'26"',h:'34"'},{s:'S',b:'34"',w:'28"',h:'36"'},{s:'M',b:'36"',w:'30"',h:'38"'},{s:'L',b:'38"',w:'32"',h:'40"'},{s:'XL',b:'40"',w:'34"',h:'42"'}];
+  return(
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:500,padding:'1rem'}} onClick={onClose}>
+      <div className="pop" style={{background:CARD2,border:`1px solid ${BRD}`,borderRadius:'16px',padding:'1.5rem',maxWidth:'360px',width:'100%'}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1rem'}}>
+          <h3 style={{fontFamily:'Georgia,serif',fontSize:'1.1rem',color:ACL}}>📏 Indian Size Guide</h3>
+          <button onClick={onClose} style={{background:'transparent',border:'none',color:MUT,cursor:'pointer',fontSize:'1.2rem'}}>✕</button>
+        </div>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.75rem'}}>
+          <thead><tr style={{borderBottom:`1px solid ${BRD}`}}>
+            <th style={{padding:'0.4rem',color:AC,textAlign:'left'}}>Size</th>
+            {gender==='male'?<><th style={{padding:'0.4rem',color:MUT,textAlign:'center'}}>Chest</th><th style={{padding:'0.4rem',color:MUT,textAlign:'center'}}>Waist</th><th style={{padding:'0.4rem',color:MUT,textAlign:'center'}}>Shoe</th></>
+            :<><th style={{padding:'0.4rem',color:MUT,textAlign:'center'}}>Bust</th><th style={{padding:'0.4rem',color:MUT,textAlign:'center'}}>Waist</th><th style={{padding:'0.4rem',color:MUT,textAlign:'center'}}>Hip</th></>}
+          </tr></thead>
+          <tbody>{data.map((r,i)=>(
+            <tr key={r.s} style={{background:i%2?'transparent':'rgba(255,255,255,0.02)',borderBottom:`1px solid ${BRD}`}}>
+              <td style={{padding:'0.42rem',color:ACL,fontWeight:'700'}}>{r.s}</td>
+              {gender==='male'?<><td style={{padding:'0.42rem',color:'#EEEAE4',textAlign:'center'}}>{r.c}</td><td style={{padding:'0.42rem',color:'#EEEAE4',textAlign:'center'}}>{r.w}</td><td style={{padding:'0.42rem',color:'#EEEAE4',textAlign:'center'}}>{r.sh}</td></>
+              :<><td style={{padding:'0.42rem',color:'#EEEAE4',textAlign:'center'}}>{r.b}</td><td style={{padding:'0.42rem',color:'#EEEAE4',textAlign:'center'}}>{r.w}</td><td style={{padding:'0.42rem',color:'#EEEAE4',textAlign:'center'}}>{r.h}</td></>}
+            </tr>
+          ))}</tbody>
+        </table>
+        <p style={{color:MUT,fontSize:'0.63rem',marginTop:'0.85rem',lineHeight:'1.65'}}>💡 Indian ethnic wear often runs small — size up when in doubt.</p>
+      </div>
+    </div>
+  );
+}
+
+/* ─── MAIN APP ─── */
+function App(){
+  const [step,setStep]=useState(0);
+  const [sg,setSg]=useState(null);
+  const [rid,setRid]=useState(null);
+  const [occasion,setOcc]=useState('casual');
+  const [budget,setBudget]=useState('medium');
+  const [skin,setSkin]=useState('medium');
+  const [hair,setHair]=useState('black');
+  const [bodyType,setBodyType]=useState(null);
+  const [items,setItems]=useState([]);
+  const [cat,setCat]=useState(null);
+  const [msgs,setMsgs]=useState([]);
+  const [inp,setInp]=useState('');
+  const [aiLoading,setAiLoading]=useState(false);
+  const [saved,setSaved]=useState([]);
+  const [outfitName,setOutfitName]=useState('');
+  const [panel,setPanel]=useState('shop');
+  const [rightTab,setRightTab]=useState('chat');
+  const [toast,setToast]=useState(null);
+  const [showSize,setShowSize]=useState(false);
+  const [showCard,setShowCard]=useState(false);
+  const [filter,setFilter]=useState('all');
+  const [searchQ,setSearchQ]=useState('');
+  const [eventDate,setEventDate]=useState('');
+  const chatEnd=useRef(null);
+
+  const rg=sg==='male'?'female':'male';
+  const rl=RECIPIENTS[sg||'male'].find(r=>r.id===rid)?.l||'';
+  const cats=Object.keys(CATALOG[rg]);
+  const activeCat=cat||cats[0];
+  const total=items.reduce((s,i)=>s+i.p,0);
+  const budgetLimit=budget==='low'?1000:budget==='medium'?5000:15000;
+
+  useEffect(()=>{chatEnd.current?.scrollIntoView({behavior:'smooth'})},[msgs]);
+  useEffect(()=>{if(cats.length&&(!cat||!cats.includes(cat)))setCat(cats[0])},[rg]);
+
+  const daysLeft=useMemo(()=>{
+    if(!eventDate)return null;
+    return Math.ceil((new Date(eventDate)-new Date())/86400000);
+  },[eventDate]);
+
+  const isSel=id=>items.some(i=>i.id===id);
+  const toggleItem=(item,category)=>{
+    const singles=['👔 Tops','🥻 Tops','👖 Bottoms','👗 Bottoms','👟 Footwear','👠 Footwear'];
+    setItems(prev=>{
+      if(prev.find(i=>i.id===item.id))return prev.filter(i=>i.id!==item.id);
+      if(singles.includes(category)){const f=prev.filter(i=>!CATALOG[rg][category].some(x=>x.id===i.id));return[...f,{...item,category}];}
+      return[...prev,{...item,category}];
+    });
+  };
+
+  const applyBundle=bundle=>{
+    const allItems=Object.values(CATALOG[rg]).flat();
+    const picked=bundle.items.map(id=>allItems.find(i=>i.id===id)).filter(Boolean);
+    const result=[];
+    picked.forEach(item=>{
+      const catKey=Object.entries(CATALOG[rg]).find(([,arr])=>arr.some(x=>x.id===item.id))?.[0];
+      if(!catKey)return;
+      const singles=['👔 Tops','🥻 Tops','👖 Bottoms','👗 Bottoms','👟 Footwear','👠 Footwear'];
+      if(singles.includes(catKey)){result.forEach((_,idx)=>{if(CATALOG[rg][catKey].some(x=>x.id===result[idx]?.id))result.splice(idx,1);})}
+      result.push({...item,category:catKey});
+    });
+    setItems(result);setToast(`"${bundle.n}" applied! 🎉`);
+    sendMsg(`I applied the "${bundle.n}" bundle: ${picked.map(i=>i.n).join(', ')}. Thoughts?`);
+  };
+
+  const surpriseMe=()=>{
+    const newItems=[];
+    cats.forEach(c=>{
+      const pool=(CATALOG[rg][c]||[]).filter(i=>i.tags?.includes(occasion)&&i.p<=budgetLimit);
+      if(pool.length)newItems.push({...pool[Math.floor(Math.random()*pool.length)],category:c});
+    });
+    setItems(newItems);setToast('Surprise outfit applied! 🎲');
+    if(newItems.length)sendMsg(`Surprise ${occasion} outfit: ${newItems.map(i=>i.n).join(', ')}. Rate it for my ${rl}!`);
+  };
+
+  const sendMsg=async(text)=>{
+    if(!text.trim()||aiLoading)return;
+    const nm={role:'user',content:text};
+    setMsgs(p=>[...p,nm]);setInp('');setAiLoading(true);setRightTab('chat');
+    try{
+      const outfit=items.length?items.map(i=>i.n+' (₹'+i.p+')').join(', '):'nothing selected yet';
+      const bodyTip=bodyType?BODY_TYPES[rg]?.find(b=>b.id===bodyType)?.tip:'';
+      const sys=`You are GiftFit AI, a warm expert Indian fashion & gifting stylist. User (${sg}) shopping for ${rl} (${rg}). Occasion: ${occasion}. Budget: ${budget==='low'?'under ₹1000':budget==='medium'?'₹1000–₹5000':'above ₹5000'}. Body type advice: ${bodyTip||'not specified'}. Avatar items: ${outfit}. Include 2-3 Amazon India product links as [Name](https://www.amazon.in/s?k=terms). Be warm, culturally Indian, concise (≤130 words). 1-2 emojis naturally.`;
+      const history=[...msgs,nm].map(m=>({role:m.role,content:m.content}));
+      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_KEY,'anthropic-version':'2023-06-01'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys,messages:history})});
+      const d=await r.json();
+      setMsgs(p=>[...p,{role:'assistant',content:d.content?.[0]?.text||'Try again!'}]);
+    }catch{setMsgs(p=>[...p,{role:'assistant',content:"Couldn't connect. Try again."}]);}
+    setAiLoading(false);
+  };
+
+  const saveOutfit=()=>{
+    if(!items.length)return;
+    const name=outfitName.trim()||`${rl}'s ${occasion} Look`;
+    setSaved(p=>[...p,{name,items:[...items],occasion,id:Date.now(),total}]);
+    setOutfitName('');setToast(`"${name}" saved! 💾`);
+  };
+
+  const shareOutfit=()=>{
+    const text=`👗 GiftFit – ${rl}'s ${occasion} Outfit\n\n${items.map(i=>`• ${i.n} – ₹${i.p.toLocaleString()}`).join('\n')}\n\nTotal: ₹${total.toLocaleString()}\n\nBuilt on GiftFit 🎁`;
+    navigator.clipboard?.writeText(text).then(()=>setToast('Copied to clipboard! 📋'));
+  };
+
+  const Btn=({children,active,onClick,style={},...p})=>(
+    <button onClick={onClick} {...p} style={{background:active?ACF:CARD,border:`1px solid ${active?AC:BRD}`,borderRadius:'8px',padding:'0.3rem 0.55rem',cursor:'pointer',color:active?ACL:MUT,fontSize:'0.67rem',fontWeight:active?'700':'400',transition:'all 0.15s',...style}}>{children}</button>
+  );
+
+  const filteredCatItems=useMemo(()=>{
+    let arr=CATALOG[rg][activeCat]||[];
+    if(searchQ){const q=searchQ.toLowerCase();arr=arr.filter(i=>i.n.toLowerCase().includes(q));}
+    if(filter==='budget')arr=arr.filter(i=>i.p<=budgetLimit);
+    if(filter==='occasion')arr=arr.filter(i=>i.tags?.includes(occasion));
+    if(filter==='trending')arr=arr.filter(i=>i.trending);
+    return arr;
+  },[activeCat,filter,searchQ,occasion,budgetLimit,rg]);
+
+  /* ── ONBOARDING ── */
+  if(step===0)return(
+    <div className="fade" style={{background:BG,minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem',textAlign:'center'}}>
+      <div style={{maxWidth:'460px'}}>
+        <div style={{fontSize:'3.5rem',marginBottom:'0.8rem'}}>🎁</div>
+        <h1 style={{fontFamily:'Georgia,serif',fontSize:'3rem',fontWeight:'800',letterSpacing:'-0.04em',color:'#EEEAE4',margin:'0 0 0.3rem'}}>GiftFit</h1>
+        <p style={{color:AC,fontSize:'0.68rem',letterSpacing:'0.26em',textTransform:'uppercase',fontWeight:'700',marginBottom:'1.4rem'}}>Virtual Try-On · AI Style Advisor · Gift Studio</p>
+        <p style={{color:MUT,lineHeight:'1.85',fontSize:'0.9rem',marginBottom:'2.5rem'}}>Buying fashion for the opposite gender is awkward and confusing. GiftFit lets you build their complete look on an avatar, get AI advice, compare brands, and generate a gift card — all in one place.</p>
+        <div style={{display:'flex',gap:'0.45rem',justifyContent:'center',flexWrap:'wrap',marginBottom:'2.8rem'}}>
+          {['👗 Virtual Try-On','🤖 AI Stylist','🎲 Surprise Me','📦 Bundle Packs','💳 Gift Card Studio','🏪 Indian Brands','📏 Size Guide','💾 Save Outfits'].map(f=>(
+            <span key={f} style={{background:ACF,border:'1px solid rgba(201,145,106,0.2)',borderRadius:'20px',padding:'0.32rem 0.75rem',fontSize:'0.68rem',color:ACL}}>{f}</span>
+          ))}
+        </div>
+        <button onClick={()=>setStep(1)} style={{background:`linear-gradient(135deg,${AC},#9B5A30)`,color:'#150800',border:'none',borderRadius:'16px',padding:'1.1rem 3rem',fontSize:'1.1rem',fontWeight:'900',cursor:'pointer',boxShadow:'0 8px 32px rgba(201,145,106,0.28)'}}>
+          Start for Free →
+        </button>
+      </div>
+    </div>
+  );
+
+  if(step===1)return(
+    <div className="fade" style={{background:BG,minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'2rem'}}>
+      <div style={{maxWidth:'380px',width:'100%'}}>
+        <button onClick={()=>setStep(0)} style={{background:'transparent',border:'none',color:MUT,cursor:'pointer',marginBottom:'2rem',fontSize:'0.82rem'}}>← Back</button>
+        <p style={{color:AC,fontSize:'0.63rem',letterSpacing:'0.18em',textTransform:'uppercase',fontWeight:'700',marginBottom:'0.35rem'}}>Step 1 / 4</p>
+        <h2 style={{fontFamily:'Georgia,serif',fontSize:'2rem',fontWeight:'700',marginBottom:'0.4rem'}}>Who are you?</h2>
+        <p style={{color:MUT,marginBottom:'2rem',fontSize:'0.88rem'}}>We'll show the right recipients and avatar.</p>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'1rem'}}>
+          {[{g:'male',e:'👨',l:'I am Male',d:'Shopping for a female'},{g:'female',e:'👩',l:'I am Female',d:'Shopping for a male'}].map(({g,e,l,d})=>(
+            <button key={g} onClick={()=>{setSg(g);setStep(2);}} style={{background:CARD,border:`2px solid ${BRD}`,borderRadius:'18px',padding:'2.2rem 1rem',cursor:'pointer',color:'#EEEAE4',display:'flex',flexDirection:'column',alignItems:'center',gap:'0.6rem',transition:'all 0.2s'}}
+              onMouseEnter={el=>el.currentTarget.style.borderColor=AC} onMouseLeave={el=>el.currentTarget.style.borderColor=BRD}>
+              <span style={{fontSize:'4rem'}}>{e}</span>
+              <span style={{fontWeight:'700',fontSize:'1rem'}}>{l}</span>
+              <span style={{fontSize:'0.66rem',color:MUT,textAlign:'center'}}>{d}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  if(step===2)return(
+    <div className="fade" style={{background:BG,minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'2rem'}}>
+      <div style={{maxWidth:'420px',width:'100%'}}>
+        <button onClick={()=>setStep(1)} style={{background:'transparent',border:'none',color:MUT,cursor:'pointer',marginBottom:'2rem',fontSize:'0.82rem'}}>← Back</button>
+        <p style={{color:AC,fontSize:'0.63rem',letterSpacing:'0.18em',textTransform:'uppercase',fontWeight:'700',marginBottom:'0.35rem'}}>Step 2 / 4</p>
+        <h2 style={{fontFamily:'Georgia,serif',fontSize:'2rem',fontWeight:'700',marginBottom:'0.4rem'}}>Shopping for…</h2>
+        <p style={{color:MUT,marginBottom:'2rem',fontSize:'0.88rem'}}>Who's the lucky person?</p>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'0.6rem'}}>
+          {RECIPIENTS[sg||'male'].map(({id,l,e})=>(
+            <button key={id} onClick={()=>{setRid(id);setStep(3);}} style={{background:CARD,border:`2px solid ${rid===id?AC:BRD}`,borderRadius:'14px',padding:'1.2rem 0.6rem',cursor:'pointer',color:'#EEEAE4',fontWeight:'600',fontSize:'0.8rem',display:'flex',flexDirection:'column',alignItems:'center',gap:'0.4rem',transition:'all 0.2s'}}
+              onMouseEnter={el=>el.currentTarget.style.borderColor=AC} onMouseLeave={el=>{if(rid!==id)el.currentTarget.style.borderColor=BRD}}>
+              <span style={{fontSize:'2rem'}}>{e}</span><span>{l}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  if(step===3)return(
+    <div className="fade" style={{background:BG,minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'2rem'}}>
+      <div style={{maxWidth:'520px',width:'100%'}}>
+        <button onClick={()=>setStep(2)} style={{background:'transparent',border:'none',color:MUT,cursor:'pointer',marginBottom:'2rem',fontSize:'0.82rem'}}>← Back</button>
+        <p style={{color:AC,fontSize:'0.63rem',letterSpacing:'0.18em',textTransform:'uppercase',fontWeight:'700',marginBottom:'0.35rem'}}>Step 3 / 4</p>
+        <h2 style={{fontFamily:'Georgia,serif',fontSize:'2rem',fontWeight:'700',marginBottom:'0.4rem'}}>Personalise</h2>
+        <p style={{color:MUT,marginBottom:'1.75rem',fontSize:'0.88rem'}}>Set occasion, budget, and avatar looks for your {rl}.</p>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'1.5rem',marginBottom:'1.5rem'}}>
+          <div>
+            <p style={{color:MUT,fontSize:'0.63rem',textTransform:'uppercase',letterSpacing:'0.12em',fontWeight:'600',marginBottom:'0.55rem'}}>Occasion</p>
+            <div style={{display:'flex',flexDirection:'column',gap:'0.32rem'}}>
+              {OCCASIONS.map(o=><Btn key={o} active={occasion===o.toLowerCase()} onClick={()=>setOcc(o.toLowerCase())} style={{textAlign:'left',padding:'0.48rem 0.65rem'}}>{o}</Btn>)}
+            </div>
+          </div>
+          <div>
+            <p style={{color:MUT,fontSize:'0.63rem',textTransform:'uppercase',letterSpacing:'0.12em',fontWeight:'600',marginBottom:'0.55rem'}}>Budget</p>
+            <div style={{display:'flex',flexDirection:'column',gap:'0.32rem',marginBottom:'1rem'}}>
+              {BUDGETS.map(b=><Btn key={b.id} active={budget===b.id} onClick={()=>setBudget(b.id)} style={{textAlign:'left',padding:'0.48rem 0.65rem'}}>{b.l}</Btn>)}
+            </div>
+            <p style={{color:MUT,fontSize:'0.63rem',textTransform:'uppercase',letterSpacing:'0.12em',fontWeight:'600',marginBottom:'0.5rem'}}>Skin Tone</p>
+            <div style={{display:'flex',gap:'0.42rem',flexWrap:'wrap',marginBottom:'0.9rem'}}>
+              {SKIN.map(s=><button key={s.id} onClick={()=>setSkin(s.id)} title={s.l} style={{width:'28px',height:'28px',borderRadius:'50%',background:s.c,border:`3px solid ${skin===s.id?AC:'transparent'}`,cursor:'pointer'}}/>)}
+            </div>
+            <p style={{color:MUT,fontSize:'0.63rem',textTransform:'uppercase',letterSpacing:'0.12em',fontWeight:'600',marginBottom:'0.5rem'}}>Hair Color</p>
+            <div style={{display:'flex',gap:'0.42rem',flexWrap:'wrap'}}>
+              {HAIR.map(h=><button key={h.id} onClick={()=>setHair(h.id)} title={h.id} style={{width:'24px',height:'24px',borderRadius:'50%',background:h.c,border:`3px solid ${hair===h.id?AC:'transparent'}`,cursor:'pointer'}}/>)}
+            </div>
+          </div>
+        </div>
+        <button onClick={()=>setStep(4)} style={{background:`linear-gradient(135deg,${AC},#9B5A30)`,color:'#150800',border:'none',borderRadius:'14px',padding:'1.05rem 2rem',fontSize:'1rem',fontWeight:'900',cursor:'pointer',width:'100%'}}>
+          Next → Body Type
+        </button>
+      </div>
+    </div>
+  );
+
+  if(step===4)return(
+    <div className="fade" style={{background:BG,minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'2rem'}}>
+      <div style={{maxWidth:'440px',width:'100%'}}>
+        <button onClick={()=>setStep(3)} style={{background:'transparent',border:'none',color:MUT,cursor:'pointer',marginBottom:'2rem',fontSize:'0.82rem'}}>← Back</button>
+        <p style={{color:AC,fontSize:'0.63rem',letterSpacing:'0.18em',textTransform:'uppercase',fontWeight:'700',marginBottom:'0.35rem'}}>Step 4 / 4</p>
+        <h2 style={{fontFamily:'Georgia,serif',fontSize:'2rem',fontWeight:'700',marginBottom:'0.4rem'}}>Body Type</h2>
+        <p style={{color:MUT,marginBottom:'0.5rem',fontSize:'0.88rem'}}>Helps the AI give better fit recommendations for your {rl}.</p>
+        <p style={{color:MUT,fontSize:'0.72rem',marginBottom:'1.5rem'}}>Optional — you can skip this.</p>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.75rem',marginBottom:'2rem'}}>
+          {(BODY_TYPES[rg]||[]).map(b=>(
+            <button key={b.id} onClick={()=>setBodyType(b.id)} style={{background:bodyType===b.id?ACF:CARD,border:`2px solid ${bodyType===b.id?AC:BRD}`,borderRadius:'14px',padding:'1.1rem 0.75rem',cursor:'pointer',color:'#EEEAE4',textAlign:'left',transition:'all 0.2s'}}>
+              <p style={{fontWeight:'700',fontSize:'0.88rem',marginBottom:'0.3rem',color:bodyType===b.id?ACL:'#EEEAE4'}}>{b.l}</p>
+              <p style={{color:MUT,fontSize:'0.65rem',lineHeight:'1.5'}}>{b.tip}</p>
+            </button>
+          ))}
+        </div>
+        <button onClick={()=>{setCat(cats[0]);setMsgs([{role:'assistant',content:`Welcome to GiftFit! 👋 I'm your personal stylist for your ${rl}'s ${occasion} look.\n\n✨ I can help with:\n• Complete outfit suggestions within budget\n• Indian brand recommendations\n• Color & fit advice\n• Amazon India deals with direct links\n\nPick items from the catalogue, try a Bundle Pack, or hit 🎲 Surprise Me!`}]);setStep(5);}} style={{background:`linear-gradient(135deg,${AC},#9B5A30)`,color:'#150800',border:'none',borderRadius:'14px',padding:'1.05rem 2rem',fontSize:'1rem',fontWeight:'900',cursor:'pointer',width:'100%'}}>
+          Open Fitting Room →
+        </button>
+      </div>
+    </div>
+  );
+
+  /* ── MAIN ROOM ── */
+  return(
+    <div className="fade" style={{background:BG,height:'100vh',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+      {toast&&<Toast msg={toast} onDone={()=>setToast(null)}/>}
+      {showSize&&<SizeModal gender={rg} onClose={()=>setShowSize(false)}/>}
+      {showCard&&<GiftCardStudio rl={rl} items={items} onClose={()=>setShowCard(false)} onToast={setToast}/>}
+
+      {/* Header */}
+      <div style={{background:CARD,borderBottom:`1px solid ${BRD}`,padding:'0.48rem 0.85rem',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,gap:'0.45rem'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'0.65rem',minWidth:0}}>
+          <button onClick={()=>setStep(4)} style={{background:'transparent',border:'none',color:MUT,cursor:'pointer',fontSize:'1rem',flexShrink:0}}>←</button>
+          <span style={{fontFamily:'Georgia,serif',fontWeight:'800',fontSize:'1rem',color:ACL,flexShrink:0}}>GiftFit</span>
+          <span style={{color:BRD}}>·</span>
+          <span style={{color:MUT,fontSize:'0.68rem',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>For <span style={{color:ACL,fontWeight:'600'}}>{rl}</span> · <span style={{color:AC}}>{occasion}</span></span>
+        </div>
+        <div style={{display:'flex',gap:'0.35rem',alignItems:'center',flexShrink:0,flexWrap:'wrap'}}>
+          {eventDate&&daysLeft!==null&&<span style={{background:'rgba(100,80,200,0.15)',border:'1px solid rgba(100,80,200,0.35)',borderRadius:'20px',padding:'0.22rem 0.65rem',fontSize:'0.6rem',color:'#C0A8F0',whiteSpace:'nowrap'}}>📅 {daysLeft>0?`${daysLeft}d left`:'Today!'}</span>}
+          <button onClick={()=>setShowSize(true)} style={{background:'transparent',border:`1px solid ${BRD}`,borderRadius:'7px',padding:'0.25rem 0.55rem',color:MUT,fontSize:'0.62rem',cursor:'pointer'}}>📏</button>
+          <button onClick={()=>setShowCard(true)} disabled={!items.length} style={{background:'transparent',border:`1px solid ${BRD}`,borderRadius:'7px',padding:'0.25rem 0.55rem',color:items.length?MUT:'rgba(100,100,120,0.4)',fontSize:'0.62rem',cursor:items.length?'pointer':'not-allowed'}}>💳</button>
+          <button onClick={surpriseMe} style={{background:'rgba(120,70,200,0.13)',border:'1px solid rgba(120,70,200,0.32)',borderRadius:'7px',padding:'0.25rem 0.65rem',color:'#C8A0F0',fontSize:'0.62rem',cursor:'pointer',fontWeight:'700'}}>🎲</button>
+          {items.length>0&&<>
+            <button onClick={shareOutfit} style={{background:'transparent',border:`1px solid ${BRD}`,borderRadius:'7px',padding:'0.25rem 0.55rem',color:MUT,fontSize:'0.62rem',cursor:'pointer'}}>📤</button>
+            <span style={{background:ACF,border:'1px solid rgba(201,145,106,0.22)',borderRadius:'20px',padding:'0.22rem 0.65rem',fontSize:'0.63rem',color:ACL,whiteSpace:'nowrap',fontWeight:'600'}}>
+              {items.length} items · ₹{total.toLocaleString()}
+              {total>budgetLimit&&<span style={{color:'#FF7070',marginLeft:'0.3rem'}}>⚠</span>}
+            </span>
+          </>}
+        </div>
+      </div>
+
+      {/* 3-Column Body */}
+      <div style={{flex:1,display:'grid',gridTemplateColumns:'216px 170px 1fr',overflow:'hidden'}}>
+
+        {/* LEFT */}
+        <div style={{borderRight:`1px solid ${BRD}`,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+          <div style={{display:'flex',borderBottom:`1px solid ${BRD}`,flexShrink:0,background:'rgba(0,0,0,0.12)'}}>
+            {[{id:'shop',l:'Shop'},{id:'bundles',l:'Bundles'},{id:'brands',l:'Brands'},{id:'saved',l:'Saved'}].map(p=>(
+              <button key={p.id} onClick={()=>setPanel(p.id)} style={{flex:1,padding:'0.5rem 0.1rem',background:'transparent',border:'none',borderBottom:`2px solid ${panel===p.id?AC:'transparent'}`,color:panel===p.id?ACL:MUT,fontSize:'0.6rem',cursor:'pointer',fontWeight:panel===p.id?'700':'400',transition:'all 0.12s'}}>{p.l}</button>
+            ))}
+          </div>
+
+          {panel==='shop'&&<>
+            <div style={{padding:'0.4rem 0.5rem',borderBottom:`1px solid ${BRD}`,flexShrink:0}}>
+              <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="Search items…" style={{width:'100%',background:'rgba(255,255,255,0.04)',border:`1px solid ${BRD}`,borderRadius:'8px',padding:'0.35rem 0.6rem',color:'#EEEAE4',fontSize:'0.68rem'}}/>
+            </div>
+            <div style={{display:'flex',gap:'0.25rem',padding:'0.4rem 0.5rem 0.25rem',flexWrap:'wrap',borderBottom:`1px solid ${BRD}`,flexShrink:0}}>
+              {cats.map(c=><Btn key={c} active={activeCat===c} onClick={()=>setCat(c)} style={{fontSize:'0.58rem',padding:'0.2rem 0.42rem'}}>{c}</Btn>)}
+            </div>
+            <div style={{display:'flex',gap:'0.25rem',padding:'0.28rem 0.5rem',borderBottom:`1px solid ${BRD}`,flexShrink:0}}>
+              {[{id:'all',l:'All'},{id:'budget',l:'Budget'},{id:'occasion',l:'Occasion'},{id:'trending',l:'🔥'}].map(f=>(
+                <Btn key={f.id} active={filter===f.id} onClick={()=>setFilter(f.id)} style={{fontSize:'0.58rem',padding:'0.18rem 0.38rem'}}>{f.l}</Btn>
+              ))}
+            </div>
+            <div style={{flex:1,overflow:'auto',padding:'0.4rem 0.48rem'}}>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.35rem'}}>
+                {filteredCatItems.map(item=>(
+                  <button key={item.id} onClick={()=>toggleItem(item,activeCat)} style={{background:isSel(item.id)?ACF:CARD2,border:`1.5px solid ${isSel(item.id)?AC:BRD}`,borderRadius:'10px',padding:'0.52rem 0.35rem',cursor:'pointer',color:'#EEEAE4',display:'flex',flexDirection:'column',alignItems:'center',gap:'0.22rem',transition:'all 0.14s',position:'relative'}}>
+                    {item.trending&&<span style={{position:'absolute',top:'-4px',right:'-4px',background:'#FF5020',borderRadius:'20px',padding:'0.08rem 0.35rem',fontSize:'0.48rem',color:'#fff',fontWeight:'700'}}>🔥</span>}
+                    {item.p>budgetLimit&&<span style={{position:'absolute',top:'-4px',left:'-4px',fontSize:'0.55rem'}}>💸</span>}
+                    <div style={{width:'24px',height:'24px',borderRadius:'50%',background:item.c,border:'2px solid rgba(255,255,255,0.12)',flexShrink:0}}/>
+                    <span style={{fontSize:'0.58rem',fontWeight:'500',lineHeight:'1.22',color:isSel(item.id)?ACL:'#DDD8D0',textAlign:'center'}}>{item.n}</span>
+                    <span style={{fontSize:'0.55rem',color:isSel(item.id)?AC:MUT}}>₹{item.p.toLocaleString()}</span>
+                    {isSel(item.id)&&<span style={{fontSize:'0.48rem',color:AC,fontWeight:'800'}}>✓ ON</span>}
+                  </button>
+                ))}
+                {filteredCatItems.length===0&&<p style={{color:MUT,fontSize:'0.68rem',gridColumn:'span 2',textAlign:'center',padding:'1.5rem 0.5rem'}}>No items match</p>}
+              </div>
+            </div>
+          </>}
+
+          {panel==='bundles'&&(
+            <div style={{flex:1,overflow:'auto',padding:'0.55rem',display:'flex',flexDirection:'column',gap:'0.45rem'}}>
+              <p style={{color:MUT,fontSize:'0.6rem',textTransform:'uppercase',letterSpacing:'0.1em',fontWeight:'600',marginBottom:'0.1rem'}}>Ready-made outfit sets</p>
+              {(BUNDLES[rg]||[]).map(b=>(
+                <div key={b.id} style={{background:CARD2,border:`1px solid ${BRD}`,borderRadius:'12px',padding:'0.7rem',cursor:'pointer',transition:'border-color 0.18s'}}
+                  onMouseEnter={el=>el.currentTarget.style.borderColor=AC} onMouseLeave={el=>el.currentTarget.style.borderColor=BRD}
+                  onClick={()=>applyBundle(b)}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'0.3rem'}}>
+                    <span style={{fontSize:'1.3rem'}}>{b.emoji}</span>
+                    <span style={{color:AC,fontSize:'0.65rem',fontWeight:'700'}}>₹{b.total.toLocaleString()}</span>
+                  </div>
+                  <p style={{color:ACL,fontSize:'0.75rem',fontWeight:'700',marginBottom:'0.2rem'}}>{b.n}</p>
+                  <p style={{color:MUT,fontSize:'0.6rem',marginBottom:'0.35rem'}}>{b.items.length} items · {b.tags.join(', ')}</p>
+                  <button style={{background:ACF,border:`1px solid rgba(201,145,106,0.2)`,borderRadius:'6px',padding:'0.28rem 0.7rem',color:ACL,fontSize:'0.62rem',cursor:'pointer',fontWeight:'600',width:'100%'}}>Apply Bundle →</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {panel==='brands'&&(
+            <div style={{flex:1,overflow:'auto',padding:'0.55rem',display:'flex',flexDirection:'column',gap:'0.4rem'}}>
+              <p style={{color:MUT,fontSize:'0.6rem',textTransform:'uppercase',letterSpacing:'0.1em',fontWeight:'600',marginBottom:'0.1rem'}}>Indian fashion brands</p>
+              {(BRANDS[rg]||[]).map(b=>(
+                <a key={b.n} href={b.url} target="_blank" rel="noreferrer" style={{background:CARD2,border:`1px solid ${BRD}`,borderRadius:'10px',padding:'0.6rem 0.7rem',display:'flex',justifyContent:'space-between',alignItems:'center',textDecoration:'none',transition:'border-color 0.18s'}}
+                  onMouseEnter={el=>el.currentTarget.style.borderColor=AC} onMouseLeave={el=>el.currentTarget.style.borderColor=BRD}>
+                  <div><p style={{color:ACL,fontSize:'0.75rem',fontWeight:'700'}}>{b.n}</p><p style={{color:MUT,fontSize:'0.6rem'}}>{b.cat}</p></div>
+                  <span style={{color:AC,fontSize:'0.68rem'}}>↗</span>
+                </a>
+              ))}
+              <div style={{background:ACF,border:`1px solid rgba(201,145,106,0.2)`,borderRadius:'10px',padding:'0.6rem',marginTop:'0.25rem'}}>
+                <p style={{color:ACL,fontSize:'0.7rem',fontWeight:'600',marginBottom:'0.2rem'}}>🛒 Also try</p>
+                <p style={{color:MUT,fontSize:'0.6rem',lineHeight:'1.6'}}>Myntra · Ajio · Meesho · Nykaa Fashion · Flipkart Fashion</p>
+              </div>
+            </div>
+          )}
+
+          {panel==='saved'&&(
+            <div style={{flex:1,overflow:'auto',padding:'0.55rem',display:'flex',flexDirection:'column',gap:'0.4rem'}}>
+              {saved.length===0
+                ?<div style={{textAlign:'center',padding:'2.5rem 1rem'}}><p style={{fontSize:'2.2rem',marginBottom:'0.5rem'}}>💾</p><p style={{color:MUT,fontSize:'0.72rem',lineHeight:'1.8'}}>No saved outfits yet.<br/>Build one below!</p></div>
+                :saved.map(o=>(
+                  <div key={o.id} onClick={()=>{setItems([...o.items]);setToast(`"${o.name}" loaded!`);}} style={{background:CARD2,border:`1px solid ${BRD}`,borderRadius:'10px',padding:'0.62rem',cursor:'pointer',transition:'border-color 0.18s'}}
+                    onMouseEnter={el=>el.currentTarget.style.borderColor=AC} onMouseLeave={el=>el.currentTarget.style.borderColor=BRD}>
+                    <div style={{display:'flex',justifyContent:'space-between',marginBottom:'0.25rem'}}>
+                      <p style={{fontSize:'0.72rem',fontWeight:'700',color:ACL}}>{o.name}</p>
+                      <p style={{fontSize:'0.6rem',color:AC}}>₹{o.total.toLocaleString()}</p>
+                    </div>
+                    <p style={{fontSize:'0.58rem',color:MUT,marginBottom:'0.35rem'}}>{o.occasion} · {o.items.length} pieces</p>
+                    <div style={{display:'flex',gap:'3px',flexWrap:'wrap'}}>{o.items.map(i=><div key={i.id} style={{width:'12px',height:'12px',borderRadius:'50%',background:i.c,border:'1px solid rgba(255,255,255,0.1)'}}/>)}</div>
+                  </div>
+                ))
+              }
+            </div>
+          )}
+
+          {items.length>0&&(
+            <div style={{padding:'0.5rem',borderTop:`1px solid ${BRD}`,flexShrink:0,background:'rgba(0,0,0,0.2)'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.35rem'}}>
+                <span style={{color:MUT,fontSize:'0.58rem',fontWeight:'700',textTransform:'uppercase'}}>Cart · ₹{total.toLocaleString()}</span>
+                <button onClick={()=>setItems([])} style={{background:'transparent',border:'none',color:MUT,cursor:'pointer',fontSize:'0.58rem'}}>Clear</button>
+              </div>
+              <div style={{maxHeight:'80px',overflow:'auto',display:'flex',flexDirection:'column',gap:'0.22rem',marginBottom:'0.38rem'}}>
+                {items.map(i=>(
+                  <a key={i.id} href={i.url} target="_blank" rel="noreferrer" style={{display:'flex',alignItems:'center',gap:'0.3rem',background:ACF,borderRadius:'5px',padding:'0.24rem 0.4rem',textDecoration:'none'}}>
+                    <div style={{width:'7px',height:'7px',borderRadius:'50%',background:i.c,flexShrink:0}}/>
+                    <span style={{color:'#EEEAE4',fontSize:'0.58rem',flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{i.n}</span>
+                    <span style={{color:AC,fontSize:'0.55rem',flexShrink:0}}>Buy→</span>
+                  </a>
+                ))}
+              </div>
+              <div style={{display:'flex',gap:'0.3rem'}}>
+                <input value={outfitName} onChange={e=>setOutfitName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&saveOutfit()} placeholder="Name & save…" style={{flex:1,background:'rgba(255,255,255,0.04)',border:`1px solid ${BRD}`,borderRadius:'6px',padding:'0.26rem 0.42rem',color:'#EEEAE4',fontSize:'0.6rem',minWidth:0}}/>
+                <button onClick={saveOutfit} style={{background:AC,border:'none',borderRadius:'6px',padding:'0.26rem 0.55rem',color:'#150800',fontSize:'0.6rem',fontWeight:'800',cursor:'pointer',flexShrink:0}}>💾</button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* CENTER: Avatar */}
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'space-between',padding:'0.65rem 0.45rem',borderRight:`1px solid ${BRD}`,background:'rgba(255,255,255,0.008)',overflow:'hidden',gap:'0.45rem'}}>
+          <div style={{background:CARD,borderRadius:'16px',border:`1px solid ${BRD}`,padding:'0.7rem 0.55rem',width:'100%',flex:1,display:'flex',flexDirection:'column',alignItems:'center',boxShadow:'0 10px 36px rgba(0,0,0,0.35)'}}>
+            <p style={{color:AC,fontSize:'0.56rem',fontWeight:'700',textTransform:'uppercase',letterSpacing:'0.14em',marginBottom:'0.5rem'}}>{rl}</p>
+            <div style={{flex:1,width:'140px',maxHeight:'300px'}}>
+              {rg==='male'?<MaleAvatar items={items} skin={skin} hair={hair}/>:<FemaleAvatar items={items} skin={skin} hair={hair}/>}
+            </div>
+            {items.length===0&&<p style={{color:MUT,fontSize:'0.58rem',textAlign:'center',marginTop:'0.5rem'}}>← Pick items!</p>}
+            {items.length>0&&<div style={{marginTop:'0.5rem',display:'flex',flexWrap:'wrap',gap:'2px',justifyContent:'center'}}>
+              {items.map(i=><div key={i.id} style={{width:'8px',height:'8px',borderRadius:'50%',background:i.c,border:'1px solid rgba(255,255,255,0.15)'}}/>)}
+            </div>}
+          </div>
+          <div style={{width:'100%',background:CARD,border:`1px solid ${BRD}`,borderRadius:'10px',padding:'0.45rem 0.55rem'}}>
+            <p style={{color:MUT,fontSize:'0.55rem',textTransform:'uppercase',letterSpacing:'0.1em',fontWeight:'600',marginBottom:'0.28rem'}}>📅 Event Date</p>
+            <input type="date" value={eventDate} onChange={e=>setEventDate(e.target.value)} style={{width:'100%',background:'transparent',border:'none',color:daysLeft!==null&&daysLeft<=7?'#FF9090':ACL,fontSize:'0.65rem',cursor:'pointer'}}/>
+            {daysLeft!==null&&<p style={{color:daysLeft<=3?'#FF9090':daysLeft<=7?'#F0A040':MUT,fontSize:'0.6rem',marginTop:'0.2rem',fontWeight:'600'}}>{daysLeft>0?`${daysLeft} days left`:daysLeft===0?'🎉 Today!':'Event passed'}</p>}
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:'0.3rem',width:'100%'}}>
+            <button onClick={()=>sendMsg(`Rate this ${occasion} outfit for my ${rl}: ${items.map(i=>i.n).join(', ')}. Give /10 and tips.`)} disabled={!items.length} style={{background:items.length?ACF:'transparent',border:`1px solid ${items.length?'rgba(201,145,106,0.25)':BRD}`,color:items.length?ACL:MUT,borderRadius:'8px',padding:'0.38rem',cursor:items.length?'pointer':'not-allowed',fontSize:'0.6rem',fontWeight:'600'}}>⭐ Rate Outfit</button>
+            <button onClick={()=>setRightTab('budget')} style={{background:'transparent',border:`1px solid ${BRD}`,color:MUT,borderRadius:'8px',padding:'0.38rem',cursor:'pointer',fontSize:'0.6rem'}} onMouseEnter={e=>{e.currentTarget.style.borderColor=AC;e.currentTarget.style.color=ACL}} onMouseLeave={e=>{e.currentTarget.style.borderColor=BRD;e.currentTarget.style.color=MUT}}>📊 Budget Chart</button>
+          </div>
+        </div>
+
+        {/* RIGHT */}
+        <div style={{display:'flex',flexDirection:'column',overflow:'hidden'}}>
+          <div style={{display:'flex',background:CARD,borderBottom:`1px solid ${BRD}`,flexShrink:0}}>
+            {[{id:'chat',l:'💬 AI Stylist'},{id:'budget',l:'📊 Budget'},{id:'avatar',l:'🎨 Avatar'}].map(t=>(
+              <button key={t.id} onClick={()=>setRightTab(t.id)} style={{flex:1,padding:'0.5rem 0.3rem',background:'transparent',border:'none',borderBottom:`2px solid ${rightTab===t.id?AC:'transparent'}`,color:rightTab===t.id?ACL:MUT,fontSize:'0.65rem',cursor:'pointer',fontWeight:rightTab===t.id?'700':'400',transition:'all 0.12s'}}>{t.l}</button>
+            ))}
+          </div>
+
+          {rightTab==='budget'&&<div style={{flex:1,overflow:'auto'}}><BudgetDonut items={items} limit={budgetLimit}/></div>}
+
+          {rightTab==='avatar'&&(
+            <div style={{flex:1,overflow:'auto',padding:'0.75rem',display:'flex',flexDirection:'column',gap:'0.85rem'}}>
+              <div>
+                <p style={{color:MUT,fontSize:'0.6rem',textTransform:'uppercase',letterSpacing:'0.12em',fontWeight:'600',marginBottom:'0.5rem'}}>Skin Tone</p>
+                <div style={{display:'flex',gap:'0.5rem',flexWrap:'wrap'}}>{SKIN.map(s=><button key={s.id} onClick={()=>setSkin(s.id)} title={s.l} style={{width:'28px',height:'28px',borderRadius:'50%',background:s.c,border:`3px solid ${skin===s.id?AC:'transparent'}`,cursor:'pointer'}}/>)}</div>
+              </div>
+              <div>
+                <p style={{color:MUT,fontSize:'0.6rem',textTransform:'uppercase',letterSpacing:'0.12em',fontWeight:'600',marginBottom:'0.5rem'}}>Hair Color</p>
+                <div style={{display:'flex',gap:'0.5rem',flexWrap:'wrap'}}>{HAIR.map(h=><button key={h.id} onClick={()=>setHair(h.id)} title={h.id} style={{width:'24px',height:'24px',borderRadius:'50%',background:h.c,border:`3px solid ${hair===h.id?AC:'transparent'}`,cursor:'pointer'}}/>)}</div>
+              </div>
+              <div>
+                <p style={{color:MUT,fontSize:'0.6rem',textTransform:'uppercase',letterSpacing:'0.12em',fontWeight:'600',marginBottom:'0.5rem'}}>Body Type</p>
+                <div style={{display:'flex',flexDirection:'column',gap:'0.3rem'}}>{(BODY_TYPES[rg]||[]).map(b=><Btn key={b.id} active={bodyType===b.id} onClick={()=>setBodyType(b.id)} style={{textAlign:'left',padding:'0.42rem 0.6rem'}}>{b.l}</Btn>)}</div>
+                {bodyType&&<div style={{marginTop:'0.65rem',background:ACF,border:'1px solid rgba(201,145,106,0.2)',borderRadius:'8px',padding:'0.55rem'}}><p style={{color:MUT,fontSize:'0.6rem',lineHeight:'1.6'}}>💡 {BODY_TYPES[rg]?.find(b=>b.id===bodyType)?.tip}</p></div>}
+              </div>
+              <div>
+                <p style={{color:MUT,fontSize:'0.6rem',textTransform:'uppercase',letterSpacing:'0.12em',fontWeight:'600',marginBottom:'0.5rem'}}>Occasion</p>
+                <div style={{display:'flex',flexDirection:'column',gap:'0.28rem'}}>{OCCASIONS.map(o=><Btn key={o} active={occasion===o.toLowerCase()} onClick={()=>setOcc(o.toLowerCase())} style={{textAlign:'left',padding:'0.38rem 0.6rem'}}>{o}</Btn>)}</div>
+              </div>
+            </div>
+          )}
+
+          {rightTab==='chat'&&<>
+            <div style={{flex:1,overflow:'auto',padding:'0.75rem',display:'flex',flexDirection:'column',gap:'0.6rem'}}>
+              {msgs.map((m,i)=>(
+                <div key={i} style={{display:'flex',flexDirection:'column',alignItems:m.role==='user'?'flex-end':'flex-start'}}>
+                  {m.role==='assistant'&&<span style={{fontSize:'0.54rem',color:MUT,marginBottom:'0.16rem',marginLeft:'2px'}}>GiftFit AI</span>}
+                  <div style={{background:m.role==='user'?ACF:CARD2,border:`1px solid ${m.role==='user'?'rgba(201,145,106,0.22)':BRD}`,borderRadius:m.role==='user'?'14px 14px 3px 14px':'14px 14px 14px 3px',padding:'0.58rem 0.72rem',maxWidth:'90%',fontSize:'0.75rem',lineHeight:'1.72',color:'#EEEAE4'}}>
+                    {parseLinks(m.content)}
+                  </div>
+                </div>
+              ))}
+              {aiLoading&&<div style={{display:'flex',alignItems:'center',gap:'5px',paddingLeft:'3px'}}>{[0,180,360].map(d=><div key={d} className="blink" style={{width:'7px',height:'7px',borderRadius:'50%',background:AC,animationDelay:`${d}ms`}}/>)}</div>}
+              <div ref={chatEnd}/>
+            </div>
+            <div style={{padding:'0.4rem 0.72rem',display:'flex',gap:'0.3rem',flexWrap:'wrap',borderTop:`1px solid ${BRD}`,flexShrink:0}}>
+              {[`Complete ${occasion} outfit`,`Colors for ${rl}`,`Budget picks`,`Trending styles`,`Gift ideas`,`Size advice`].map(q=>(
+                <button key={q} onClick={()=>sendMsg(q)} style={{background:'transparent',border:`1px solid ${BRD}`,borderRadius:'20px',padding:'0.24rem 0.5rem',fontSize:'0.58rem',color:MUT,cursor:'pointer',whiteSpace:'nowrap',transition:'all 0.14s'}}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor=AC;e.currentTarget.style.color=ACL}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor=BRD;e.currentTarget.style.color=MUT}}>
+                  {q}
+                </button>
+              ))}
+            </div>
+            <div style={{padding:'0.55rem 0.72rem',borderTop:`1px solid ${BRD}`,display:'flex',gap:'0.42rem',flexShrink:0}}>
+              <input value={inp} onChange={e=>setInp(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&(e.preventDefault(),sendMsg(inp))} placeholder={`Ask about your ${rl}'s style…`} style={{flex:1,background:'rgba(255,255,255,0.04)',border:`1px solid ${BRD}`,borderRadius:'12px',padding:'0.62rem 0.82rem',color:'#EEEAE4',fontSize:'0.76rem'}}/>
+              <button onClick={()=>sendMsg(inp)} disabled={aiLoading||!inp.trim()} style={{background:!inp.trim()||aiLoading?'rgba(201,145,106,0.16)':AC,border:'none',borderRadius:'12px',padding:'0.62rem 0.95rem',color:'#150800',fontWeight:'900',cursor:!inp.trim()||aiLoading?'not-allowed':'pointer',fontSize:'0.88rem',transition:'background 0.18s',flexShrink:0}}>→</button>
+            </div>
+          </>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+{% endraw %}
+</script>
+</body>
+</html>
